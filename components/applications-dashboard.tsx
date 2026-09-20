@@ -13,8 +13,20 @@ import ContactsView from "@/components/contacts/contacts-view"
 import { exportApplicationsCsv } from "@/lib/csv"
 import ReviewQueueView from "@/components/review-queue/review-queue-view"
 import AnalyticsView from "@/components/analytics/analytics-view"
+import ResumeView from "@/components/resume/resume-view"
 
 /* ---------- Types ---------- */
+type View = "applications" | "review" | "contacts" | "analytics" | "profile" | "resume"
+
+const VIEW_LABELS: Record<View, string> = {
+  applications: "Applications",
+  review: "Review queue",
+  contacts: "Contacts",
+  analytics: "Analytics",
+  profile: "Profile",
+  resume: "Resume",
+}
+
 type Pill = { label: string; tone: "teal" | "amber" | "gray" }
 type CardData = { id: string; role: string; company: string; pill?: Pill; highlight?: boolean }
 type Column = { title: string; cards: CardData[] }
@@ -272,7 +284,7 @@ function UserMenu() {
 /* ---------- Main component ---------- */
 export default function ApplicationsDashboard() {
   const { user } = useAuth()
-  const [view, setView] = useState<"applications" | "review" | "contacts" | "analytics" | "profile">("applications")
+  const [view, setView] = useState<View>("applications")
   const { applications, loading } = useApplications()
   const [showAddModal, setShowAddModal] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -318,6 +330,11 @@ export default function ApplicationsDashboard() {
             <circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" />
           </svg>
         </NavIcon>
+        <NavIcon active={view === "resume"} onClick={() => setView("resume")} label="Resume">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z" /><path d="M14 3v6h6" />
+          </svg>
+        </NavIcon>
       </nav>
 
       {/* Main column */}
@@ -333,15 +350,7 @@ export default function ApplicationsDashboard() {
             </h1>
             <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: colors.teal }} />
             <span className="text-sm" style={{ color: colors.muted }}>
-              {view === "profile"
-                ? "Profile"
-                : view === "contacts"
-                  ? "Contacts"
-                  : view === "review"
-                    ? "Review queue"
-                    : view === "analytics"
-                      ? "Analytics"
-                      : "Applications"}
+              {VIEW_LABELS[view]}
             </span>
           </div>
 
@@ -375,6 +384,8 @@ export default function ApplicationsDashboard() {
           <ReviewQueueView />
         ) : view === "analytics" ? (
           <AnalyticsView />
+        ) : view === "resume" ? (
+          <ResumeView />
         ) : (
         /* Two-panel body */
         <div className="flex flex-1 flex-col lg:flex-row">

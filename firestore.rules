@@ -23,9 +23,12 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == profileId;
     }
 
+    // Same fix as profiles above: Resume is a uid-keyed singleton too, so
+    // this checks the path instead of resource.data — a resource.data
+    // check breaks on a first-time user's read (no document exists yet,
+    // so `resource` is null and `resource.data.ownerId` throws).
     match /resumes/{resumeId} {
-      allow read, update, delete: if isOwner(resource.data.ownerId);
-      allow create: if isOwnerOnCreate();
+      allow read, write: if request.auth != null && request.auth.uid == resumeId;
     }
 
     match /jobs/{jobId} {

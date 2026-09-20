@@ -95,6 +95,60 @@ export type Profile = {
   updatedAt: string
 }
 
+// Resume is structured, not a raw file (spec §4) — experience bullets are
+// stored individually so tailoring can later select/reorder/emphasize
+// specific ones per job rather than rewriting the whole entry. Sub-entries
+// carry a client-generated `id` (crypto.randomUUID()) purely for React
+// keys and add/remove — they're array items inside one Resume document,
+// not separate Firestore documents.
+export type ExperienceEntry = {
+  id: string
+  company: string
+  title: string
+  startDate: string
+  endDate?: string
+  current: boolean
+  bullets: string[]
+}
+
+export type EducationEntry = {
+  id: string
+  school: string
+  degree: string
+  field?: string
+  startDate?: string
+  endDate?: string
+}
+
+export type CertificationEntry = {
+  id: string
+  name: string
+  issuer?: string
+  date?: string
+}
+
+// Spec §16 — the project bank Quill draws from when tailoring: 1-2 most
+// relevant projects per job, the same way it'll select resume bullets.
+export type ProjectEntry = {
+  id: string
+  name: string
+  description: string
+  skills: string[]
+  link?: string
+}
+
+// One per user, keyed by uid — same singleton pattern as Profile.
+export type Resume = {
+  ownerId: string
+  summary: string
+  experience: ExperienceEntry[]
+  skills: string[]
+  education: EducationEntry[]
+  certifications: CertificationEntry[]
+  projects: ProjectEntry[]
+  updatedAt: string
+}
+
 export type Contact = {
   id: string
   ownerId: string

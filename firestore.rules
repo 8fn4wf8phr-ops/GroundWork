@@ -1,0 +1,46 @@
+rules_version = '2';
+
+// Spec ref: groundwork-spec.md Section 5 — every document carries an
+// ownerId, and no read or write is allowed unless request.auth.uid matches
+// it. There is no wide-open "test mode" fallback here.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(resourceOwnerId) {
+      return request.auth != null && request.auth.uid == resourceOwnerId;
+    }
+
+    function isOwnerOnCreate() {
+      return request.auth != null && request.auth.uid == request.resource.data.ownerId;
+    }
+
+    // Profile documents are keyed by the owner's own uid (see
+    // lib/firestore/profile.ts), so the path itself proves ownership —
+    // unlike the collections below, this doesn't need to read
+    // resource.data, which matters because resource is null when the
+    // document doesn't exist yet (a first-time user's Profile read).
+    match /profiles/{profileId} {
+      allow read, write: if request.auth != null && request.auth.uid == profileId;
+    }
+
+    match /resumes/{resumeId} {
+      allow read, update, delete: if isOwner(resource.data.ownerId);
+      allow create: if isOwnerOnCreate();
+    }
+
+    match /jobs/{jobId} {
+      allow read, update, delete: if isOwner(resource.data.ownerId);
+      allow create: if isOwnerOnCreate();
+    }
+
+    match /applications/{applicationId} {
+      allow read, update, delete: if isOwner(resource.data.ownerId);
+      allow create: if isOwnerOnCreate();
+    }
+
+    match /contacts/{contactId} {
+      allow read, update, delete: if isOwner(resource.data.ownerId);
+      allow create: if isOwnerOnCreate();
+    }
+  }
+}

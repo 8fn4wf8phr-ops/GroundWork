@@ -12,6 +12,7 @@ import ProfileView from "@/components/profile/profile-view"
 import ContactsView from "@/components/contacts/contacts-view"
 import { exportApplicationsCsv } from "@/lib/csv"
 import ReviewQueueView from "@/components/review-queue/review-queue-view"
+import AnalyticsView from "@/components/analytics/analytics-view"
 
 /* ---------- Types ---------- */
 type Pill = { label: string; tone: "teal" | "amber" | "gray" }
@@ -271,7 +272,7 @@ function UserMenu() {
 /* ---------- Main component ---------- */
 export default function ApplicationsDashboard() {
   const { user } = useAuth()
-  const [view, setView] = useState<"applications" | "review" | "contacts" | "profile">("applications")
+  const [view, setView] = useState<"applications" | "review" | "contacts" | "analytics" | "profile">("applications")
   const { applications, loading } = useApplications()
   const [showAddModal, setShowAddModal] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -307,7 +308,7 @@ export default function ApplicationsDashboard() {
             <rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18" />
           </svg>
         </NavIcon>
-        <NavIcon>
+        <NavIcon active={view === "analytics"} onClick={() => setView("analytics")} label="Analytics">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
           </svg>
@@ -338,7 +339,9 @@ export default function ApplicationsDashboard() {
                   ? "Contacts"
                   : view === "review"
                     ? "Review queue"
-                    : "Applications"}
+                    : view === "analytics"
+                      ? "Analytics"
+                      : "Applications"}
             </span>
           </div>
 
@@ -370,6 +373,8 @@ export default function ApplicationsDashboard() {
           <ContactsView applications={applications} />
         ) : view === "review" ? (
           <ReviewQueueView />
+        ) : view === "analytics" ? (
+          <AnalyticsView />
         ) : (
         /* Two-panel body */
         <div className="flex flex-1 flex-col lg:flex-row">

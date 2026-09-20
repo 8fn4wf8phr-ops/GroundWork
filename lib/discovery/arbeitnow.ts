@@ -1,4 +1,5 @@
 import type { DiscoveredJob } from "@/lib/discovery/types"
+import { stripHtml } from "@/lib/discovery/strip-html"
 
 // Arbeitnow's public job board API — no key required, CORS-open
 // (access-control-allow-origin: *, confirmed live), documented at
@@ -18,18 +19,6 @@ type ArbeitnowPosting = {
   job_types: string[]
   location: string
   created_at: number
-}
-
-// The API returns raw HTML in `description`. It's never rendered as HTML
-// in this app (no dangerouslySetInnerHTML) — stripped to plain text here
-// so it's safe to display and usable for keyword matching.
-function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/\s+/g, " ")
-    .trim()
 }
 
 export async function fetchArbeitnowJobs(): Promise<DiscoveredJob[]> {

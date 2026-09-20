@@ -7,10 +7,21 @@ import { useProfile } from "@/lib/hooks/use-profile"
 import { useReviewQueue } from "@/lib/hooks/use-review-queue"
 import { fetchArbeitnowJobs } from "@/lib/discovery/arbeitnow"
 import { fetchAdzunaJobsForProfile } from "@/lib/discovery/adzuna"
+import { fetchRemoteOkJobs } from "@/lib/discovery/remoteok"
+import { fetchJobicyJobsForProfile } from "@/lib/discovery/jobicy"
 import { saveDiscoveredJobs, dismissJob } from "@/lib/firestore/jobs"
 import { createApplicationFromJob } from "@/lib/firestore/applications"
 import type { DiscoveredJob } from "@/lib/discovery/types"
-import type { Job } from "@/lib/types"
+import type { Job, Profile } from "@/lib/types"
+
+type SourceId = "arbeitnow" | "adzuna" | "remoteok" | "jobicy"
+
+const SOURCES: { id: SourceId; label: string; fetch: (profile: Profile) => Promise<DiscoveredJob[]> }[] = [
+  { id: "arbeitnow", label: "Arbeitnow", fetch: () => fetchArbeitnowJobs() },
+  { id: "adzuna", label: "Adzuna", fetch: (profile) => fetchAdzunaJobsForProfile(profile) },
+  { id: "remoteok", label: "RemoteOK", fetch: () => fetchRemoteOkJobs() },
+  { id: "jobicy", label: "Jobicy", fetch: (profile) => fetchJobicyJobsForProfile(profile) },
+]
 
 function MatchScoreBadge({ score }: { score?: number }) {
   if (score == null) return null
@@ -105,32 +116,32 @@ export default function ReviewQueueView() {
   const { user } = useAuth()
   const { profile } = useProfile()
   const { pending, loading } = useReviewQueue()
-  const [pullingSource, setPullingSource] = useState<"arbeitnow" | "adzuna" | null>(null)
+  const [selectedSource, setSelectedSource] = useState<SourceId>("arbeitnow")
+  const [pulling, setPulling] = useState(false)
   const [pullMessage, setPullMessage] = useState<string | null>(null)
   const [busyJobId, setBusyJobId] = useState<string | null>(null)
 
-  const pullFrom = async (
-    source: "arbeitnow" | "adzuna",
-    label: string,
-    fetchPostings: () => Promise<DiscoveredJob[]>,
-  ) => {
+  const pull = async () => {
     if (!user) return
-    setPullingSource(source)
+    const source = SOURCES.find((s) => s.id === selectedSource)!
+    setPulling(true)
     setPullMessage(null)
     try {
-      const postings = await fetchPostings()
+      const postings = await source.fetch(profile ?? EMPTY_PROFILE)
       const added = await saveDiscoveredJobs(user.uid, postings, profile ?? EMPTY_PROFILE)
       setPullMessage(
         added === 0
-          ? `Pulled ${postings.length} postings from ${label} — no new ones since last time.`
-          : `Added ${added} new posting${added === 1 ? "" : "s"} from ${label}.`,
+          ? `Pulled ${postings.length} postings from ${source.label} — no new ones since last time.`
+          : `Added ${added} new posting${added === 1 ? "" : "s"} from ${source.label}.`,
       )
     } catch (err) {
       setPullMessage(
-        err instanceof Error ? `Couldn't pull from ${label}: ${err.message}` : `Couldn't reach ${label} right now.`,
+        err instanceof Error
+          ? `Couldn't pull from ${source.label}: ${err.message}`
+          : `Couldn't reach ${source.label} right now.`,
       )
     } finally {
-      setPullingSource(null)
+      setPulling(false)
     }
   }
 
@@ -165,23 +176,27 @@ export default function ReviewQueueView() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <select
+            value={selectedSource}
+            onChange={(e) => setSelectedSource(e.target.value as SourceId)}
+            disabled={pulling}
+            className="rounded-md border bg-transparent px-3 py-1.5 text-sm outline-none disabled:opacity-50"
+            style={{ borderColor: colors.border, color: colors.text, backgroundColor: colors.bg }}
+          >
+            {SOURCES.map((s) => (
+              <option key={s.id} value={s.id} style={{ backgroundColor: colors.bg }}>
+                {s.label}
+              </option>
+            ))}
+          </select>
           <button
             type="button"
-            disabled={pullingSource !== null}
-            onClick={() => pullFrom("arbeitnow", "Arbeitnow", fetchArbeitnowJobs)}
+            disabled={pulling}
+            onClick={pull}
             className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:opacity-90 disabled:opacity-50"
             style={{ borderColor: colors.border, color: colors.text }}
           >
-            {pullingSource === "arbeitnow" ? "Pulling…" : "Pull from Arbeitnow"}
-          </button>
-          <button
-            type="button"
-            disabled={pullingSource !== null}
-            onClick={() => pullFrom("adzuna", "Adzuna", () => fetchAdzunaJobsForProfile(profile ?? EMPTY_PROFILE))}
-            className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:opacity-90 disabled:opacity-50"
-            style={{ borderColor: colors.border, color: colors.text }}
-          >
-            {pullingSource === "adzuna" ? "Pulling…" : "Pull from Adzuna"}
+            {pulling ? "Pulling…" : "Pull new postings"}
           </button>
         </div>
       </div>

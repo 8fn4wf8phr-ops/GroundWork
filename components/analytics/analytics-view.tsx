@@ -3,7 +3,9 @@
 import { colors } from "@/lib/theme"
 import { useApplications } from "@/lib/hooks/use-applications"
 import { computeOverallStats, computeRatesByChannel, computeRatesBySource, type RateGroup } from "@/lib/analytics"
+import { computeRejectionPatterns } from "@/lib/rejection-reasons"
 import RateMeter from "@/components/analytics/rate-meter"
+import type { ApplicationWithJob } from "@/lib/types"
 
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
@@ -54,6 +56,48 @@ function GroupSection({ title, groups }: { title: string; groups: RateGroup[] })
   )
 }
 
+function RejectionPatternsSection({ applications }: { applications: ApplicationWithJob[] }) {
+  const patterns = computeRejectionPatterns(applications)
+  return (
+    <div>
+      <h3 className="mb-1 text-sm font-semibold uppercase tracking-wide" style={{ color: colors.muted }}>
+        Rejection patterns
+      </h3>
+      <p className="mb-3 text-xs" style={{ color: colors.muted }}>
+        Grouped by exact wording (after trimming/case) — not paraphrase detection, so &quot;went with an internal
+        candidate&quot; and &quot;they hired internally&quot; count separately.
+      </p>
+      {patterns.length === 0 ? (
+        <p className="text-sm" style={{ color: colors.muted }}>
+          No rejection reasons logged yet.
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {patterns.map((p) => (
+            <li
+              key={p.reason}
+              className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm"
+              style={{ borderColor: colors.border, backgroundColor: colors.card }}
+            >
+              <span style={{ color: colors.text }}>{p.reason}</span>
+              <span
+                className="shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold"
+                style={
+                  p.count >= 2
+                    ? { color: colors.teal, backgroundColor: "rgba(53,201,193,0.12)" }
+                    : { color: colors.muted, backgroundColor: "rgba(139,149,161,0.12)" }
+                }
+              >
+                {p.count}×
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 export default function AnalyticsView() {
   const { applications, loading } = useApplications()
   const overall = computeOverallStats(applications)
@@ -97,6 +141,7 @@ export default function AnalyticsView() {
 
           <GroupSection title="By channel" groups={byChannel} />
           <GroupSection title="By source" groups={bySource} />
+          <RejectionPatternsSection applications={applications} />
         </div>
       )}
     </div>

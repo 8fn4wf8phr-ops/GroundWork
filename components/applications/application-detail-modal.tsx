@@ -5,13 +5,16 @@ import { colors } from "@/lib/theme"
 import { deleteApplication, updateApplication } from "@/lib/firestore/applications"
 import { linkContactToApplication, unlinkContactFromApplication } from "@/lib/firestore/contacts"
 import { useContacts } from "@/lib/hooks/use-contacts"
+import { existingRejectionReasons } from "@/lib/rejection-reasons"
 import { APPLICATION_STATUSES, CHANNELS, type ApplicationStatus, type ApplicationWithJob, type Channel } from "@/lib/types"
 
 export default function ApplicationDetailModal({
   application,
+  allApplications,
   onClose,
 }: {
   application: ApplicationWithJob
+  allApplications: ApplicationWithJob[]
   onClose: () => void
 }) {
   const [status, setStatus] = useState<ApplicationStatus>(application.status)
@@ -28,6 +31,7 @@ export default function ApplicationDetailModal({
   const [linkingContactId, setLinkingContactId] = useState("")
   const linkedContacts = contacts.filter((c) => c.applicationIds.includes(application.id))
   const unlinkedContacts = contacts.filter((c) => !c.applicationIds.includes(application.id))
+  const reasonSuggestions = existingRejectionReasons(allApplications)
 
   const save = async () => {
     setSaving(true)
@@ -159,9 +163,17 @@ export default function ApplicationDetailModal({
               value={rejectionReason}
               onChange={(e) => setRejectionReason(e.target.value)}
               placeholder="e.g. went with an internal candidate"
+              list="rejection-reason-suggestions"
               className="rounded-lg border bg-transparent px-3 py-2 text-sm outline-none"
               style={{ borderColor: colors.border, color: colors.text }}
             />
+            {reasonSuggestions.length > 0 && (
+              <datalist id="rejection-reason-suggestions">
+                {reasonSuggestions.map((r) => (
+                  <option key={r} value={r} />
+                ))}
+              </datalist>
+            )}
           </label>
 
           <label className="flex flex-col gap-1.5 text-sm">

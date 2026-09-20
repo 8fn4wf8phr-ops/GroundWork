@@ -9,17 +9,19 @@ import { fetchArbeitnowJobs } from "@/lib/discovery/arbeitnow"
 import { fetchAdzunaJobsForProfile } from "@/lib/discovery/adzuna"
 import { fetchRemoteOkJobs } from "@/lib/discovery/remoteok"
 import { fetchJobicyJobsForProfile } from "@/lib/discovery/jobicy"
+import { fetchThemuseJobs } from "@/lib/discovery/themuse"
 import { saveDiscoveredJobs, dismissJob } from "@/lib/firestore/jobs"
 import { createApplicationFromJob } from "@/lib/firestore/applications"
 import type { DiscoveredJob } from "@/lib/discovery/types"
 import type { Job, Profile } from "@/lib/types"
 
-type SourceId = "arbeitnow" | "adzuna" | "remoteok" | "jobicy"
+type SourceId = "arbeitnow" | "adzuna" | "remoteok" | "jobicy" | "themuse"
 
 const SOURCES: { id: SourceId; label: string; fetch: (profile: Profile) => Promise<DiscoveredJob[]> }[] = [
   { id: "arbeitnow", label: "Arbeitnow", fetch: () => fetchArbeitnowJobs() },
   { id: "adzuna", label: "Adzuna", fetch: (profile) => fetchAdzunaJobsForProfile(profile) },
   { id: "remoteok", label: "RemoteOK", fetch: () => fetchRemoteOkJobs() },
+  { id: "themuse", label: "The Muse", fetch: (profile) => fetchThemuseJobs(profile) },
   { id: "jobicy", label: "Jobicy", fetch: (profile) => fetchJobicyJobsForProfile(profile) },
 ]
 

@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context"
 import { useProfile } from "@/lib/hooks/use-profile"
 import { saveProfile } from "@/lib/firestore/profile"
 import TagListInput from "@/components/profile/tag-list-input"
+import DeleteAccountSection from "@/components/profile/delete-account-section"
 
 export default function ProfileView() {
   const { user } = useAuth()
@@ -185,6 +186,8 @@ export default function ProfileView() {
           )}
         </div>
       </div>
+
+      <DeleteAccountSection />
     </div>
   )
 }

@@ -461,7 +461,11 @@ export default function ApplicationsDashboard() {
 
       {showAddModal && <AddApplicationModal onClose={() => setShowAddModal(false)} />}
       {selectedApplication && (
-        <ApplicationDetailModal application={selectedApplication} onClose={() => setSelectedId(null)} />
+        <ApplicationDetailModal
+          application={selectedApplication}
+          allApplications={applications}
+          onClose={() => setSelectedId(null)}
+        />
       )}
     </div>
   )

@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context"
 import { useApplications } from "@/lib/hooks/use-applications"
 import { APPLICATION_STATUSES, type ApplicationStatus, type ApplicationWithJob } from "@/lib/types"
 import AddApplicationModal from "@/components/applications/add-application-modal"
+import NeedsFollowUpBanner from "@/components/applications/needs-follow-up-banner"
 import ApplicationDetailModal from "@/components/applications/application-detail-modal"
 import ProfileView from "@/components/profile/profile-view"
 import ContactsView from "@/components/contacts/contacts-view"
@@ -401,6 +402,7 @@ export default function ApplicationsDashboard() {
                 </button>
               </div>
             </div>
+            {!loading && <NeedsFollowUpBanner applications={applications} onSelect={setSelectedId} />}
             {!loading && columns.length === 0 ? (
               <div
                 className="rounded-lg border border-dashed p-8 text-center text-sm"

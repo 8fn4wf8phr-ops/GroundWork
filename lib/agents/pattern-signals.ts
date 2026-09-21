@@ -27,11 +27,17 @@ export type NotablePattern = {
   lowConfidence: boolean
 }
 
+// analytics.ts's catch-all buckets for applications with no channel /
+// no known source. They aren't real channels or sources, so "unlabeled
+// outreach outperforms Cold" is a comparison against a grab-bag, not a
+// pattern the user could act on.
+const CATCH_ALL_KEYS = new Set(["unspecified", "unknown"])
+
 function biggestGapWithinDimension(
   groups: RateGroup[],
   dimension: "channel" | "source",
 ): NotablePattern | null {
-  const withData = groups.filter((g) => g.appliedCount > 0)
+  const withData = groups.filter((g) => g.appliedCount > 0 && !CATCH_ALL_KEYS.has(g.key))
   if (withData.length < 2) return null
 
   const sorted = [...withData].sort((a, b) => b.responseRate - a.responseRate)

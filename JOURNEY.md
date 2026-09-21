@@ -347,7 +347,10 @@ What changed:
 - **Lens** now treats a gap as only as trustworthy as its *thinner*
   side (10 applications vs. 1 is one data point, not a pattern), and
   prefers a well-sampled source finding over a shaky channel one instead
-  of always taking the channel result first.
+  of always taking the channel result first. Driving Lens from the real
+  UI turned up one more: it compared "No channel set" against Cold, which
+  is a grab-bag bucket, not a channel — those catch-all groups are now
+  excluded from the comparison.
 - **Quill** no longer repeats a bullet, skill or project the model listed
   twice.
 

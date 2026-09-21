@@ -194,6 +194,19 @@ export default function TailorMaterialsModal({
                   </div>
                 )}
 
+                {materials.warnings && materials.warnings.length > 0 && (
+                  <div className="rounded-lg border px-3 py-2" style={{ borderColor: colors.amber }}>
+                    <span className="text-xs font-medium uppercase tracking-wide" style={{ color: colors.amber }}>
+                      Check before sending
+                    </span>
+                    <ul className="mt-1 flex flex-col gap-1 text-sm" style={{ color: colors.text }}>
+                      {materials.warnings.map((w, i) => (
+                        <li key={i}>{w}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 <label className="flex flex-col gap-1.5 text-sm">
                   <span className="text-xs font-medium uppercase tracking-wide" style={{ color: colors.muted }}>
                     Cover letter (editable)

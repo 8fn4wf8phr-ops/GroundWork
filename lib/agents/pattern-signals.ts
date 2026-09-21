@@ -8,6 +8,10 @@ import type { RateGroup } from "@/lib/analytics"
 // whether the leading group's sample is small enough that Ledger has a
 // legitimate statistical objection (the same appliedCount < 3 threshold
 // already shown as "not enough data yet" in the Analytics view).
+//
+// A gap is only as trustworthy as its *thinner* side: a 10-application
+// leader against a 1-application laggard is one data point, not a
+// pattern — so lowConfidence checks both groups, not just the leader.
 const MIN_NOTABLE_RATIO = 1.5
 const MIN_NOTABLE_POINT_GAP = 20
 const LOW_CONFIDENCE_THRESHOLD = 3
@@ -19,6 +23,7 @@ export type NotablePattern = {
   leaderSampleSize: number
   laggardLabel: string
   laggardRate: number
+  laggardSampleSize: number
   lowConfidence: boolean
 }
 
@@ -46,10 +51,20 @@ function biggestGapWithinDimension(
     leaderSampleSize: leader.appliedCount,
     laggardLabel: laggard.label,
     laggardRate: laggard.responseRate,
-    lowConfidence: leader.appliedCount < LOW_CONFIDENCE_THRESHOLD,
+    laggardSampleSize: laggard.appliedCount,
+    lowConfidence:
+      leader.appliedCount < LOW_CONFIDENCE_THRESHOLD || laggard.appliedCount < LOW_CONFIDENCE_THRESHOLD,
   }
 }
 
+// Prefers a well-sampled finding over a shaky one: if the channel gap
+// rests on 1-2 applications but the source gap is solid, surface the
+// source gap rather than escalating a "needs your call" over weak data.
+// Ties (both confident, or both low-confidence) keep channel-first order.
 export function detectNotablePattern(byChannel: RateGroup[], bySource: RateGroup[]): NotablePattern | null {
-  return biggestGapWithinDimension(byChannel, "channel") ?? biggestGapWithinDimension(bySource, "source")
+  const candidates = [
+    biggestGapWithinDimension(byChannel, "channel"),
+    biggestGapWithinDimension(bySource, "source"),
+  ].filter((p): p is NotablePattern => p !== null)
+  return candidates.find((p) => !p.lowConfidence) ?? candidates[0] ?? null
 }

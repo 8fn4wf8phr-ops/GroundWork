@@ -218,6 +218,10 @@ export type TailoredMaterials = {
   skills: string[]
   projects: { name: string; description: string; link?: string }[]
   coverLetter: string
+  // Figures in the generated summary/cover letter that appear nowhere in
+  // the resume, profile, or posting — Quill's free text can't be verified
+  // structurally, so this flags the one class that can be checked.
+  warnings?: string[]
   generatedAt: string
   // Spec §2: "tweak one sentence in a cover letter that didn't quite
   // sound like you" — kept separate from the generated version so a

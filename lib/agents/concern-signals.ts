@@ -8,6 +8,11 @@ import type { Job } from "@/lib/types"
 // posting twice), or (2) the description is unusually short. The LLM
 // narrates these facts in Scout's voice; it never generates the facts
 // themselves.
+//
+// Note: a pull is always a single source (saveDiscoveredJobs keys its
+// dedup off the first posting's source), so two postings from the same
+// pull can never be a *cross-source* repeat of each other — comparing
+// against previously-saved jobs is the complete check for this signal.
 const VAGUE_DESCRIPTION_MAX_CHARS = 200
 
 export function detectConcernSignal(job: DiscoveredJob, existingJobs: Job[]): string | null {
@@ -19,7 +24,12 @@ export function detectConcernSignal(job: DiscoveredJob, existingJobs: Job[]): st
       j.source !== job.source,
   )
   if (crossSourceRepeat) {
-    return `This exact company + title also showed up from a different source (${crossSourceRepeat.source}), discovered on ${crossSourceRepeat.dateDiscovered.slice(0, 10)}.`
+    const when = crossSourceRepeat.dateDiscovered.slice(0, 10)
+    // A manual entry is the user's own record, not another job board —
+    // saying it "showed up from a different source" would misdescribe it.
+    return crossSourceRepeat.source === "manual"
+      ? `This exact company + title is already in your tracker — you added it manually on ${when}.`
+      : `This exact company + title also showed up from a different source (${crossSourceRepeat.source}), discovered on ${when}.`
   }
 
   const descriptionLength = (job.description ?? "").trim().length

@@ -1,19 +1,16 @@
-import { NextRequest, NextResponse } from "next/server"
-import Anthropic from "@anthropic-ai/sdk"
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod"
 import { z } from "zod"
-
-const MODEL = "claude-sonnet-5"
-
-const MessageSchema = z.object({ message: z.string() })
+import { agentRoute, narrate } from "@/lib/server/agent-route"
 
 const SAGE_SYSTEM = `You are Sage, the intake agent for Groundwork, a personal job-search assistant. Your personality: warm, endlessly curious, the type who remembers what you said three questions ago and circles back to it. You push gently on gaps rather than staying quiet about them.
 
 You'll be given one specific, real gap between the user's Profile and Resume. Write ONE short, warm, curious note about it for a shared case file — gently nudging, never nagging. Reference only the fact you're given; never invent details about the user.`
 
-type SignalInput =
-  | { type: "no_experience"; targetRoles: string[] }
-  | { type: "no_target_roles" }
+const short = z.string().max(200)
+const SignalSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("no_experience"), targetRoles: z.array(short).max(20) }),
+  z.object({ type: z.literal("no_target_roles") }),
+])
+type SignalInput = z.infer<typeof SignalSchema>
 
 function buildPrompt(signal: SignalInput): string {
   if (signal.type === "no_experience") {
@@ -22,26 +19,9 @@ function buildPrompt(signal: SignalInput): string {
   return `The user has real work experience filled out in their Resume but hasn't set any target roles in their Profile, so match scoring has nothing to compare postings against. Write your note.`
 }
 
-export async function POST(request: NextRequest) {
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) {
-    return NextResponse.json({ error: "ANTHROPIC_API_KEY is not configured on the server." }, { status: 500 })
-  }
-  const signal = (await request.json()) as SignalInput
-  const client = new Anthropic({ apiKey })
-
-  try {
-    const response = await client.messages.parse({
-      model: MODEL,
-      max_tokens: 200,
-      system: SAGE_SYSTEM,
-      messages: [{ role: "user", content: buildPrompt(signal) }],
-      output_config: { format: zodOutputFormat(MessageSchema) },
-    })
-    const message = response.parsed_output?.message ?? "Worth filling in the rest of your Profile and Resume when you get a chance."
-    return NextResponse.json({ message })
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error"
-    return NextResponse.json({ error: `Sage check-in failed: ${message}` }, { status: 502 })
-  }
-}
+export const POST = agentRoute({ name: "Sage check-in", schema: SignalSchema }, async ({ client, body }) => {
+  const message =
+    (await narrate(client, { system: SAGE_SYSTEM, prompt: buildPrompt(body), maxTokens: 200 })) ??
+    "Worth filling in the rest of your Profile and Resume when you get a chance."
+  return { message }
+})

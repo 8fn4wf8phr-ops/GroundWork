@@ -132,7 +132,7 @@ export default function ReviewQueueView() {
     setPullMessage(null)
     try {
       const postings = await source.fetch(profile ?? EMPTY_PROFILE)
-      const { savedJobs, savedDiscovered, existingJobs } = await saveDiscoveredJobs(
+      const { savedJobs, existingJobs } = await saveDiscoveredJobs(
         user.uid,
         postings,
         profile ?? EMPTY_PROFILE,
@@ -144,7 +144,7 @@ export default function ReviewQueueView() {
       )
       if (savedJobs.length > 0 && profile) {
         try {
-          const entries = await reviewTopNewJobs(savedJobs, savedDiscovered, existingJobs, profile)
+          const entries = await reviewTopNewJobs(savedJobs, existingJobs, profile)
           if (entries.length > 0) await createCaseFileEntries(user.uid, entries)
         } catch {
           // Agent commentary is a bonus layer on top of real, already-saved

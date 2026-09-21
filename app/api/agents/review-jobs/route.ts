@@ -1,14 +1,15 @@
-import { NextRequest, NextResponse } from "next/server"
-import Anthropic from "@anthropic-ai/sdk"
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod"
+import type Anthropic from "@anthropic-ai/sdk"
 import { z } from "zod"
+import { agentRoute, narrate, parseStructured } from "@/lib/server/agent-route"
 
 // Server-side only — ANTHROPIC_API_KEY is a real secret tied to billing,
 // same reasoning as the Adzuna key (see app/api/discovery/adzuna/route.ts).
-const MODEL = "claude-sonnet-5"
+// Auth, size limits and error handling live in lib/server/agent-route.ts.
 
-const CompassTakeSchema = z.object({ message: z.string() })
-const ScoutConcernSchema = z.object({ message: z.string() })
+// Mirrors MAX_JOBS_TO_REVIEW on the client (lib/agents/review-jobs.ts) —
+// enforced here too, since a client-side cap doesn't bind a direct caller.
+const MAX_JOBS_PER_REQUEST = 3
+
 const CompassResponseSchema = z.object({
   message: z.string(),
   // true = Compass disagrees with Scout's concern and holds its position
@@ -25,19 +26,25 @@ const SCOUT_SYSTEM = `You are Scout, the discovery agent for Groundwork, a perso
 
 You will be given one specific, verified concern about a posting. Write ONE short, natural sentence flagging it — like a real note in a shared case file — in your own voice. Only reference the fact you were given; never invent additional concerns.`
 
-type JobInput = {
-  jobId: string
-  title: string
-  company: string
-  location: string
-  matchScore: number
-  matchReasons: string[]
-  concernSignal: string | null
-}
-
-type ProfileInput = {
-  targetRoles: string[]
-}
+const short = z.string().max(300)
+const RequestSchema = z.object({
+  jobs: z
+    .array(
+      z.object({
+        jobId: z.string().max(128),
+        title: short,
+        company: short,
+        location: short,
+        matchScore: z.number().min(0).max(100),
+        matchReasons: z.array(short).max(20),
+        concernSignal: z.string().max(500).nullable(),
+      }),
+    )
+    .max(MAX_JOBS_PER_REQUEST),
+  profile: z.object({ targetRoles: z.array(z.string().max(200)).max(20) }),
+})
+type JobInput = z.infer<typeof RequestSchema>["jobs"][number]
+type ProfileInput = z.infer<typeof RequestSchema>["profile"]
 
 type CaseFileEntryDraft = {
   agent: "Compass" | "Scout"
@@ -79,60 +86,43 @@ async function reviewOneJob(
   job: JobInput,
   profile: ProfileInput,
 ): Promise<CaseFileEntryDraft[]> {
-  const compassTake = await client.messages.parse({
-    model: MODEL,
-    max_tokens: 300,
-    system: COMPASS_SYSTEM,
-    messages: [{ role: "user", content: compassPrompt(job, profile) }],
-    output_config: { format: zodOutputFormat(CompassTakeSchema) },
-  })
-  const compassMessage = compassTake.parsed_output?.message ?? `Scored this one ${job.matchScore}/100.`
+  const compassMessage =
+    (await narrate(client, { system: COMPASS_SYSTEM, prompt: compassPrompt(job, profile), maxTokens: 300 })) ??
+    `Scored this one ${job.matchScore}/100.`
 
   const entries: CaseFileEntryDraft[] = [{ agent: "Compass", message: compassMessage, jobId: job.jobId }]
 
   if (job.concernSignal) {
-    const scout = await client.messages.parse({
-      model: MODEL,
-      max_tokens: 300,
-      system: SCOUT_SYSTEM,
-      messages: [{ role: "user", content: scoutPrompt(job) }],
-      output_config: { format: zodOutputFormat(ScoutConcernSchema) },
-    })
-    const scoutMessage = scout.parsed_output?.message ?? job.concernSignal
+    const scoutMessage =
+      (await narrate(client, { system: SCOUT_SYSTEM, prompt: scoutPrompt(job), maxTokens: 300 })) ??
+      job.concernSignal
     entries.push({ agent: "Scout", message: scoutMessage, jobId: job.jobId })
 
-    const compassResponse = await client.messages.parse({
-      model: MODEL,
-      max_tokens: 300,
+    const compassResponse = await parseStructured(client, {
       system: COMPASS_SYSTEM,
-      messages: [{ role: "user", content: compassResponsePrompt(job, compassMessage, scoutMessage) }],
-      output_config: { format: zodOutputFormat(CompassResponseSchema) },
+      prompt: compassResponsePrompt(job, compassMessage, scoutMessage),
+      maxTokens: 300,
+      schema: CompassResponseSchema,
     })
-    const standsFirm = compassResponse.parsed_output?.standsFirm ?? true
-    const responseMessage = compassResponse.parsed_output?.message ?? "Standing by my original read on this one."
+    const standsFirm = compassResponse?.standsFirm ?? true
+    const responseMessage = compassResponse?.message ?? "Standing by my original read on this one."
     entries.push({ agent: "Compass", message: responseMessage, jobId: job.jobId, needsYourCall: standsFirm })
   }
 
   return entries
 }
 
-export async function POST(request: NextRequest) {
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "ANTHROPIC_API_KEY is not configured on the server." },
-      { status: 500 },
-    )
-  }
+export const POST = agentRoute({ name: "Agent review", schema: RequestSchema }, async ({ client, body }) => {
+  // allSettled, not all: each job's exchange is independent, so one job
+  // hitting a rate limit or a parse failure must not throw away the
+  // exchanges the other jobs already completed (and were paid for).
+  const settled = await Promise.allSettled(body.jobs.map((job) => reviewOneJob(client, job, body.profile)))
 
-  const body = (await request.json()) as { jobs: JobInput[]; profile: ProfileInput }
-  const client = new Anthropic({ apiKey })
+  const entries = settled.flatMap((r) => (r.status === "fulfilled" ? r.value : []))
+  const failures = settled.filter((r): r is PromiseRejectedResult => r.status === "rejected")
+  for (const failure of failures) console.error("[agents] Agent review: one job failed:", failure.reason)
 
-  try {
-    const results = await Promise.all(body.jobs.map((job) => reviewOneJob(client, job, body.profile)))
-    return NextResponse.json({ entries: results.flat() })
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error"
-    return NextResponse.json({ error: `Agent review failed: ${message}` }, { status: 502 })
-  }
-}
+  // Only a total failure is an error; a partial result is still useful.
+  if (failures.length > 0 && entries.length === 0) throw failures[0].reason
+  return { entries }
+})

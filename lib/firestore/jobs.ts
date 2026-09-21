@@ -12,12 +12,7 @@ export function subscribeToJobs(ownerId: string, onChange: (jobs: Job[]) => void
 }
 
 export type SaveDiscoveredJobsResult = {
-  // savedJobs[i] corresponds to savedDiscovered[i] — returned as aligned
-  // pairs rather than making the caller re-derive that alignment (e.g. by
-  // re-filtering the original list), which is an easy place to introduce
-  // an off-by-one mismatch.
   savedJobs: Job[]
-  savedDiscovered: DiscoveredJob[]
   // The pre-existing set, for callers that need to check newly-saved
   // postings against what was already there (e.g. concern-signal
   // detection) without a second Firestore round trip.
@@ -41,7 +36,7 @@ export async function saveDiscoveredJobs(
   )
 
   const newPostings = discovered.filter((p) => !p.externalId || !seenExternalIds.has(p.externalId))
-  if (newPostings.length === 0) return { savedJobs: [], savedDiscovered: [], existingJobs }
+  if (newPostings.length === 0) return { savedJobs: [], existingJobs }
 
   const batch = writeBatch(db)
   const now = new Date().toISOString()
@@ -61,7 +56,7 @@ export async function saveDiscoveredJobs(
     savedJobs.push({ id: ref.id, ...jobData })
   }
   await batch.commit()
-  return { savedJobs, savedDiscovered: newPostings, existingJobs }
+  return { savedJobs, existingJobs }
 }
 
 export async function dismissJob(jobId: string) {

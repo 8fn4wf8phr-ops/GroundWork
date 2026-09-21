@@ -1,5 +1,6 @@
 import type { Job, Profile, Resume } from "@/lib/types"
 import type { NewTailoredMaterials } from "@/lib/firestore/tailored-materials"
+import { clip, postAgent } from "@/lib/agents/client"
 
 export async function tailorForJob(
   resume: Resume,
@@ -7,10 +8,9 @@ export async function tailorForJob(
   job: Job,
   applicationId: string,
 ): Promise<NewTailoredMaterials> {
-  const res = await fetch("/api/agents/tailor", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+  const result = await postAgent<Omit<NewTailoredMaterials, "applicationId" | "jobId">>(
+    "/api/agents/tailor",
+    {
       resume: {
         summary: resume.summary,
         experience: resume.experience.map((e) => ({
@@ -29,13 +29,16 @@ export async function tailorForJob(
         })),
       },
       profile: { targetRoles: profile.targetRoles, mustHaves: profile.mustHaves },
-      job: { title: job.title, company: job.company, location: job.location, description: job.description ?? "" },
-    }),
-  })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.error ?? `Tailoring returned ${res.status}`)
-  }
-  const result = await res.json()
+      job: {
+        title: clip(job.title, 300),
+        company: clip(job.company, 300),
+        location: clip(job.location, 300),
+        // Third-party postings can be arbitrarily long; the route caps the
+        // description, so trim here rather than have the whole request rejected.
+        description: clip(job.description ?? "", 20000),
+      },
+    },
+    "Tailoring",
+  )
   return { ...result, applicationId, jobId: job.id }
 }

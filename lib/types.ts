@@ -184,3 +184,28 @@ export type CaseFileEntry = {
   resolvedAt?: string
   resolution?: string
 }
+
+// Quill's staged output for one Application (spec §7, §16) — "assembles a
+// tailored resume (selecting/reordering bullets, projects, and skills)
+// and cover letter per Job... stages everything; never touches submit."
+// experience/skills/projects here are always resolved server-side against
+// the user's real Resume data before being saved — the LLM selects and
+// orders by reference, it never regenerates this content, so nothing
+// here can be a fabricated bullet or skill. Only summary and coverLetter
+// are genuinely generated text.
+export type TailoredMaterials = {
+  id: string
+  ownerId: string
+  applicationId: string
+  jobId: string
+  summary: string
+  experience: { company: string; title: string; bullets: string[] }[]
+  skills: string[]
+  projects: { name: string; description: string; link?: string }[]
+  coverLetter: string
+  generatedAt: string
+  // Spec §2: "tweak one sentence in a cover letter that didn't quite
+  // sound like you" — kept separate from the generated version so a
+  // later regeneration doesn't silently clobber a manual edit.
+  editedCoverLetter?: string
+}

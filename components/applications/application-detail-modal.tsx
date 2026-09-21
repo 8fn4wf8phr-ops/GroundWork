@@ -6,6 +6,7 @@ import { deleteApplication, updateApplication } from "@/lib/firestore/applicatio
 import { linkContactToApplication, unlinkContactFromApplication } from "@/lib/firestore/contacts"
 import { useContacts } from "@/lib/hooks/use-contacts"
 import { existingRejectionReasons } from "@/lib/rejection-reasons"
+import TailorMaterialsModal from "@/components/applications/tailor-materials-modal"
 import { APPLICATION_STATUSES, CHANNELS, type ApplicationStatus, type ApplicationWithJob, type Channel } from "@/lib/types"
 
 export default function ApplicationDetailModal({
@@ -32,6 +33,7 @@ export default function ApplicationDetailModal({
   const linkedContacts = contacts.filter((c) => c.applicationIds.includes(application.id))
   const unlinkedContacts = contacts.filter((c) => !c.applicationIds.includes(application.id))
   const reasonSuggestions = existingRejectionReasons(allApplications)
+  const [showTailorModal, setShowTailorModal] = useState(false)
 
   const save = async () => {
     setSaving(true)
@@ -96,6 +98,15 @@ export default function ApplicationDetailModal({
             View posting
           </a>
         )}
+
+        <button
+          type="button"
+          onClick={() => setShowTailorModal(true)}
+          className="mt-2 block rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:opacity-90"
+          style={{ borderColor: colors.border, color: colors.text }}
+        >
+          Tailor application
+        </button>
 
         <div className="mt-4 flex flex-col gap-3.5">
           <div className="grid grid-cols-2 gap-3">
@@ -302,6 +313,10 @@ export default function ApplicationDetailModal({
           </div>
         </div>
       </div>
+
+      {showTailorModal && (
+        <TailorMaterialsModal application={application} onClose={() => setShowTailorModal(false)} />
+      )}
     </div>
   )
 }

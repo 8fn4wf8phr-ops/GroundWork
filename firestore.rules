@@ -50,5 +50,15 @@ service cloud.firestore {
       allow read, update, delete: if isOwner(resource.data.ownerId);
       allow create: if isOwnerOnCreate();
     }
+
+    // Deliberately NOT keyed by applicationId (unlike profiles/resumes'
+    // uid-keying) — that would reintroduce the null-resource-on-first-read
+    // problem those two hit, since applicationId isn't the auth uid. Same
+    // random-id + query-by-ownerId pattern as jobs/applications/contacts
+    // instead, which never touches a possibly-nonexistent specific doc.
+    match /tailoredMaterials/{entryId} {
+      allow read, update, delete: if isOwner(resource.data.ownerId);
+      allow create: if isOwnerOnCreate();
+    }
   }
 }

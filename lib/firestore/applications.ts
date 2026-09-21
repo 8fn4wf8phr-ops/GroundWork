@@ -105,7 +105,14 @@ export async function createManualApplication(ownerId: string, input: ManualAppl
 
 export type ApplicationEditableFields = Pick<
   Application,
-  "status" | "channel" | "appliedDate" | "followUpDate" | "rejectionReason" | "notes"
+  | "status"
+  | "channel"
+  | "appliedDate"
+  | "followUpDate"
+  | "rejectionReason"
+  | "notes"
+  | "resumeVersionUsed"
+  | "coverLetterUsed"
 >
 
 // updateDoc rejects `undefined` field values outright (it throws, it

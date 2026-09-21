@@ -47,10 +47,21 @@ function CaseFileEntryRow({ entry }: { entry: CaseFileEntry }) {
 }
 
 function NeedsYourCallCard({ entry, allEntries }: { entry: CaseFileEntry; allEntries: CaseFileEntry[] }) {
-  // The other side of the disagreement — the entry from a different agent,
-  // on the same job, immediately before this one.
+  // The other side of the disagreement. Grouped by jobId when the
+  // exchange is about a specific Job (Compass/Scout), or by threadId when
+  // it isn't (Lens/Ledger's channel/source digest) — never by "no jobId"
+  // alone, which would also match unrelated entries from a completely
+  // different exchange that also happens to lack a jobId. `<=` rather
+  // than `<`: entries in one exchange share createdAt (written as a
+  // batch — see createCaseFileEntries), so a strict `<` would incorrectly
+  // exclude a genuine same-timestamp match.
   const otherSide = allEntries
-    .filter((e) => e.jobId === entry.jobId && e.agent !== entry.agent && e.createdAt < entry.createdAt)
+    .filter((e) => {
+      if (e.agent === entry.agent || e.createdAt > entry.createdAt) return false
+      if (entry.jobId) return e.jobId === entry.jobId
+      if (entry.threadId) return e.threadId === entry.threadId
+      return false
+    })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
 
   const resolve = (resolution: string) => resolveCaseFileEntry(entry.id, resolution)

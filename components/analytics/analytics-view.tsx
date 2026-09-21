@@ -1,9 +1,14 @@
 "use client"
 
+import { useState } from "react"
 import { colors } from "@/lib/theme"
+import { useAuth } from "@/lib/auth-context"
 import { useApplications } from "@/lib/hooks/use-applications"
 import { computeOverallStats, computeRatesByChannel, computeRatesBySource, type RateGroup } from "@/lib/analytics"
 import { computeRejectionPatterns } from "@/lib/rejection-reasons"
+import { detectNotablePattern } from "@/lib/agents/pattern-signals"
+import { generateDigest } from "@/lib/agents/lens"
+import { createCaseFileEntries } from "@/lib/firestore/case-file"
 import RateMeter from "@/components/analytics/rate-meter"
 import type { ApplicationWithJob } from "@/lib/types"
 
@@ -99,10 +104,33 @@ function RejectionPatternsSection({ applications }: { applications: ApplicationW
 }
 
 export default function AnalyticsView() {
+  const { user } = useAuth()
   const { applications, loading } = useApplications()
   const overall = computeOverallStats(applications)
   const byChannel = computeRatesByChannel(applications)
   const bySource = computeRatesBySource(applications)
+  const [askingLens, setAskingLens] = useState(false)
+  const [lensMessage, setLensMessage] = useState<string | null>(null)
+
+  const askLens = async () => {
+    if (!user) return
+    setAskingLens(true)
+    setLensMessage(null)
+    try {
+      const pattern = detectNotablePattern(byChannel, bySource)
+      if (!pattern) {
+        setLensMessage("Lens: nothing stands out enough yet — no gap big enough to be worth flagging.")
+        return
+      }
+      const entries = await generateDigest(pattern)
+      await createCaseFileEntries(user.uid, entries)
+      setLensMessage("Posted to the Case File — check the Applications board.")
+    } catch (err) {
+      setLensMessage(err instanceof Error ? `Couldn't reach Lens: ${err.message}` : "Couldn't reach Lens right now.")
+    } finally {
+      setAskingLens(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -114,14 +142,33 @@ export default function AnalyticsView() {
 
   return (
     <div className="mx-auto w-full max-w-3xl p-6">
-      <div className="mb-6">
-        <h2 className="text-xl font-bold" style={{ color: colors.text, fontFamily: "var(--font-space-grotesk)" }}>
-          Analytics
-        </h2>
-        <p className="mt-1 text-sm" style={{ color: colors.muted }}>
-          What&apos;s actually working — response, interview, and offer rates, sliced by channel and source.
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold" style={{ color: colors.text, fontFamily: "var(--font-space-grotesk)" }}>
+            Analytics
+          </h2>
+          <p className="mt-1 text-sm" style={{ color: colors.muted }}>
+            What&apos;s actually working — response, interview, and offer rates, sliced by channel and source.
+          </p>
+        </div>
+        {overall.appliedCount > 0 && (
+          <button
+            type="button"
+            disabled={askingLens}
+            onClick={askLens}
+            className="shrink-0 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:opacity-90 disabled:opacity-50"
+            style={{ borderColor: colors.border, color: colors.text }}
+          >
+            {askingLens ? "Asking Lens…" : "Ask Lens for a digest"}
+          </button>
+        )}
       </div>
+
+      {lensMessage && (
+        <p className="mb-4 text-sm" style={{ color: colors.muted }}>
+          {lensMessage}
+        </p>
+      )}
 
       {overall.appliedCount === 0 ? (
         <div

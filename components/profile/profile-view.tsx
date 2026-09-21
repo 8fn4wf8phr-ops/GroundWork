@@ -4,13 +4,20 @@ import { useEffect, useState } from "react"
 import { colors } from "@/lib/theme"
 import { useAuth } from "@/lib/auth-context"
 import { useProfile } from "@/lib/hooks/use-profile"
+import { useResume } from "@/lib/hooks/use-resume"
 import { saveProfile } from "@/lib/firestore/profile"
+import { createCaseFileEntries } from "@/lib/firestore/case-file"
+import { detectSageSignal } from "@/lib/agents/sage-signals"
+import { checkInWithSage } from "@/lib/agents/sage"
 import TagListInput from "@/components/profile/tag-list-input"
 import DeleteAccountSection from "@/components/profile/delete-account-section"
 
 export default function ProfileView() {
   const { user } = useAuth()
   const { profile, loading } = useProfile()
+  const { resume } = useResume()
+  const [checkingIn, setCheckingIn] = useState(false)
+  const [sageMessage, setSageMessage] = useState<string | null>(null)
 
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
@@ -65,6 +72,26 @@ export default function ProfileView() {
       setError("Couldn't save your profile. Please try again.")
     } finally {
       setSaving(false)
+    }
+  }
+
+  const checkInSage = async () => {
+    if (!user || !profile) return
+    setCheckingIn(true)
+    setSageMessage(null)
+    try {
+      const signal = detectSageSignal(profile, resume)
+      if (!signal) {
+        setSageMessage("Sage: nothing stands out right now — Profile and Resume line up fine.")
+        return
+      }
+      const message = await checkInWithSage(signal)
+      await createCaseFileEntries(user.uid, [{ agent: "Sage", message }])
+      setSageMessage("Posted to the Case File — check the Applications board.")
+    } catch (err) {
+      setSageMessage(err instanceof Error ? `Couldn't reach Sage: ${err.message}` : "Couldn't reach Sage right now.")
+    } finally {
+      setCheckingIn(false)
     }
   }
 
@@ -169,7 +196,7 @@ export default function ProfileView() {
           </p>
         )}
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={save}
@@ -179,12 +206,26 @@ export default function ProfileView() {
           >
             {saving ? "Saving…" : "Save profile"}
           </button>
+          <button
+            type="button"
+            onClick={checkInSage}
+            disabled={checkingIn}
+            className="rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:opacity-90 disabled:opacity-50"
+            style={{ borderColor: colors.border, color: colors.text }}
+          >
+            {checkingIn ? "Checking in…" : "Check in with Sage"}
+          </button>
           {savedAt && !saving && (
             <span className="text-sm" style={{ color: colors.muted }}>
               Saved
             </span>
           )}
         </div>
+        {sageMessage && (
+          <p className="text-sm" style={{ color: colors.muted }}>
+            {sageMessage}
+          </p>
+        )}
       </div>
 
       <DeleteAccountSection />

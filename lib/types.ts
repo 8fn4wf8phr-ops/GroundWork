@@ -129,12 +129,18 @@ export type CertificationEntry = {
 
 // Spec §16 — the project bank Quill draws from when tailoring: 1-2 most
 // relevant projects per job, the same way it'll select resume bullets.
+// `sourceId` is set only on projects imported from a portfolio's
+// projects.json (spec §16) — a stable key (derived from the source
+// entry's link/name) so re-syncing updates the same entry instead of
+// duplicating it. Manually-added projects leave it unset.
 export type ProjectEntry = {
   id: string
   name: string
   description: string
   skills: string[]
   link?: string
+  repoLink?: string
+  sourceId?: string
 }
 
 // One per user, keyed by uid — same singleton pattern as Profile.
@@ -146,6 +152,9 @@ export type Resume = {
   education: EducationEntry[]
   certifications: CertificationEntry[]
   projects: ProjectEntry[]
+  // Spec §16 — the portfolio site's own base URL; projects.json is
+  // fetched from `${portfolioUrl}/projects.json`.
+  portfolioUrl?: string
   updatedAt: string
 }
 
@@ -180,6 +189,12 @@ export type CaseFileEntry = {
   createdAt: string
   jobId?: string
   applicationId?: string
+  // Groups entries belonging to one exchange when they aren't naturally
+  // tied together by jobId (e.g. Lens/Ledger's channel/source digest,
+  // which isn't about any single Job) — set to the same value across every
+  // entry in that exchange. jobId already does this job for Compass/Scout;
+  // threadId exists for the exchanges that have no natural Job to key on.
+  threadId?: string
   needsYourCall?: boolean
   resolvedAt?: string
   resolution?: string

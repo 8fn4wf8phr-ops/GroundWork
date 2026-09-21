@@ -2,8 +2,11 @@
 
 import { useState } from "react"
 import { colors } from "@/lib/theme"
+import { useAuth } from "@/lib/auth-context"
 import { deleteApplication, updateApplication } from "@/lib/firestore/applications"
 import { linkContactToApplication, unlinkContactFromApplication } from "@/lib/firestore/contacts"
+import { createCaseFileEntries } from "@/lib/firestore/case-file"
+import { logStatusChange } from "@/lib/agents/ledger"
 import { useContacts } from "@/lib/hooks/use-contacts"
 import { existingRejectionReasons } from "@/lib/rejection-reasons"
 import TailorMaterialsModal from "@/components/applications/tailor-materials-modal"
@@ -18,6 +21,7 @@ export default function ApplicationDetailModal({
   allApplications: ApplicationWithJob[]
   onClose: () => void
 }) {
+  const { user } = useAuth()
   const [status, setStatus] = useState<ApplicationStatus>(application.status)
   const [channel, setChannel] = useState<Channel | "">(application.channel ?? "")
   const [appliedDate, setAppliedDate] = useState(application.appliedDate ?? "")
@@ -38,6 +42,7 @@ export default function ApplicationDetailModal({
   const save = async () => {
     setSaving(true)
     setError(null)
+    const statusChanged = status !== application.status
     try {
       await updateApplication(application.id, {
         status,
@@ -47,6 +52,24 @@ export default function ApplicationDetailModal({
         rejectionReason: rejectionReason || undefined,
         notes: notes || undefined,
       })
+      if (statusChanged && user && application.job) {
+        // Ledger's log is a bonus layer on top of the real, already-saved
+        // status change — a failure here shouldn't block closing the
+        // modal or hide that the save itself succeeded.
+        try {
+          const message = await logStatusChange(
+            application.job.company,
+            application.job.title,
+            application.status,
+            status,
+          )
+          await createCaseFileEntries(user.uid, [
+            { agent: "Ledger", message, applicationId: application.id, jobId: application.jobId },
+          ])
+        } catch {
+          // ignore — see comment above
+        }
+      }
       onClose()
     } catch {
       setError("Couldn't save those changes. Please try again.")

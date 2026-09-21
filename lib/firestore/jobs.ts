@@ -11,6 +11,19 @@ export function subscribeToJobs(ownerId: string, onChange: (jobs: Job[]) => void
   })
 }
 
+export type SaveDiscoveredJobsResult = {
+  // savedJobs[i] corresponds to savedDiscovered[i] — returned as aligned
+  // pairs rather than making the caller re-derive that alignment (e.g. by
+  // re-filtering the original list), which is an easy place to introduce
+  // an off-by-one mismatch.
+  savedJobs: Job[]
+  savedDiscovered: DiscoveredJob[]
+  // The pre-existing set, for callers that need to check newly-saved
+  // postings against what was already there (e.g. concern-signal
+  // detection) without a second Firestore round trip.
+  existingJobs: Job[]
+}
+
 // Writes only the postings not already seen from this source (matched by
 // the source's own externalId — spec Section 7, Scout "dedupes against
 // existing Jobs"), scoring each one against the Profile as it's saved.
@@ -20,34 +33,35 @@ export async function saveDiscoveredJobs(
   ownerId: string,
   discovered: DiscoveredJob[],
   profile: Profile,
-): Promise<number> {
+): Promise<SaveDiscoveredJobsResult> {
   const existingSnap = await getDocs(query(collection(db, "jobs"), where("ownerId", "==", ownerId)))
+  const existingJobs = existingSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Job)
   const seenExternalIds = new Set(
-    existingSnap.docs
-      .map((d) => d.data() as Job)
-      .filter((j) => j.source === discovered[0]?.source)
-      .map((j) => j.externalId),
+    existingJobs.filter((j) => j.source === discovered[0]?.source).map((j) => j.externalId),
   )
 
   const newPostings = discovered.filter((p) => !p.externalId || !seenExternalIds.has(p.externalId))
-  if (newPostings.length === 0) return 0
+  if (newPostings.length === 0) return { savedJobs: [], savedDiscovered: [], existingJobs }
 
   const batch = writeBatch(db)
   const now = new Date().toISOString()
+  const savedJobs: Job[] = []
   for (const posting of newPostings) {
     const { score, reasons } = computeMatchScore(posting, profile)
     const ref = doc(collection(db, "jobs"))
-    batch.set(ref, {
+    const jobData = {
       ...posting,
       ownerId,
       dateDiscovered: now,
       matchScore: score,
       matchReasons: reasons,
-      reviewStatus: "pending",
-    })
+      reviewStatus: "pending" as const,
+    }
+    batch.set(ref, jobData)
+    savedJobs.push({ id: ref.id, ...jobData })
   }
   await batch.commit()
-  return newPostings.length
+  return { savedJobs, savedDiscovered: newPostings, existingJobs }
 }
 
 export async function dismissJob(jobId: string) {

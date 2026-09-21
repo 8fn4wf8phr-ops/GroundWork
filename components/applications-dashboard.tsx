@@ -14,6 +14,7 @@ import { exportApplicationsCsv } from "@/lib/csv"
 import ReviewQueueView from "@/components/review-queue/review-queue-view"
 import AnalyticsView from "@/components/analytics/analytics-view"
 import ResumeView from "@/components/resume/resume-view"
+import CaseFileFeed from "@/components/case-file/case-file-feed"
 
 /* ---------- Types ---------- */
 type View = "applications" | "review" | "contacts" | "analytics" | "profile" | "resume"
@@ -30,7 +31,6 @@ const VIEW_LABELS: Record<View, string> = {
 type Pill = { label: string; tone: "teal" | "amber" | "gray" }
 type CardData = { id: string; role: string; company: string; pill?: Pill; highlight?: boolean }
 type Column = { title: string; cards: CardData[] }
-type Entry = { agent: string; agentTone: "teal" | "white"; time: string; message: string }
 
 /* ---------- Live application data -> board columns ---------- */
 const CHANNEL_PILL: Record<string, Pill> = {
@@ -61,30 +61,6 @@ function buildColumns(applications: ApplicationWithJob[]): Column[] {
     cards: byStatus.get(status)!,
   }))
 }
-
-/* ---------- Case file placeholder data ----------
-   Not wired yet — this feed comes from the agent roster (Section 8 of the
-   spec), which doesn't exist until Scout/Compass/etc. are built. */
-const entries: Entry[] = [
-  {
-    agent: "Compass",
-    agentTone: "teal",
-    time: "2m ago",
-    message: "Scored Cardinal Systems an 8/10 — strong skills overlap, right seniority band.",
-  },
-  {
-    agent: "Scout",
-    agentTone: "white",
-    time: "2m ago",
-    message: "Worth flagging — this exact listing's been reposted three times in two months.",
-  },
-  {
-    agent: "Compass",
-    agentTone: "teal",
-    time: "1m ago",
-    message: "Fair — I don't weight repost history. Dropping it to a 6 until we know more.",
-  },
-]
 
 /* ---------- Nav rail icons ---------- */
 function NavIcon({
@@ -190,71 +166,6 @@ function KanbanColumn({ column, onCardClick }: { column: Column; onCardClick: (i
         {column.cards.map((card) => (
           <ApplicationCard key={card.id} app={card} onClick={() => onCardClick(card.id)} />
         ))}
-      </div>
-    </div>
-  )
-}
-
-/* ---------- Case file entry ---------- */
-function CaseFileEntry({ entry }: { entry: Entry }) {
-  return (
-    <li className="flex gap-3">
-      <div
-        className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border"
-        style={{ borderColor: colors.border }}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={colors.muted} strokeWidth="1.5" aria-hidden="true">
-          <circle cx="12" cy="12" r="9" />
-          <circle cx="12" cy="12" r="3" />
-        </svg>
-      </div>
-      <div className="min-w-0">
-        <div className="flex items-center gap-1.5 text-sm">
-          <span className="font-semibold" style={{ color: entry.agentTone === "teal" ? colors.teal : colors.text }}>
-            {entry.agent}
-          </span>
-          <span style={{ color: colors.muted }}>· {entry.time}</span>
-        </div>
-        <p className="mt-1 text-sm leading-relaxed" style={{ color: colors.text }}>
-          {entry.message}
-        </p>
-      </div>
-    </li>
-  )
-}
-
-/* ---------- Needs your call card ---------- */
-function NeedsYourCallCard() {
-  return (
-    <div
-      className="rounded-xl border p-4"
-      style={{ borderColor: colors.amber, backgroundColor: "rgba(245,166,35,0.06)" }}
-    >
-      <div className="flex items-center gap-2">
-        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: colors.amber }} />
-        <span className="text-sm font-semibold" style={{ color: colors.amber }}>
-          Needs your call
-        </span>
-      </div>
-      <p className="mt-2.5 text-sm leading-relaxed" style={{ color: colors.text }}>
-        Lens flagged referrals converting 3x better this month — Ledger says that&apos;s only two data points, not
-        enough to trust yet. Want Lens to keep surfacing this, or wait for more data?
-      </p>
-      <div className="mt-4 flex flex-wrap gap-2.5">
-        <button
-          type="button"
-          className="rounded-md px-3.5 py-1.5 text-sm font-semibold transition-opacity hover:opacity-90"
-          style={{ backgroundColor: colors.amber, color: colors.bg }}
-        >
-          Keep surfacing
-        </button>
-        <button
-          type="button"
-          className="rounded-md border px-3.5 py-1.5 text-sm font-medium transition-colors"
-          style={{ borderColor: colors.border, color: colors.text }}
-        >
-          Wait for more data
-        </button>
       </div>
     </div>
   )
@@ -437,23 +348,7 @@ export default function ApplicationsDashboard() {
 
           {/* Right panel — Case file */}
           <aside className="w-full shrink-0 p-6 lg:w-[420px]">
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold" style={{ color: colors.text, fontFamily: "var(--font-space-grotesk)" }}>
-                Case file
-              </h2>
-              <span className="flex items-center gap-1.5 text-sm" style={{ color: colors.muted }}>
-                <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: colors.teal }} />
-                Live
-              </span>
-            </div>
-            <ul className="flex flex-col gap-5">
-              {entries.map((entry, i) => (
-                <CaseFileEntry key={i} entry={entry} />
-              ))}
-            </ul>
-            <div className="mt-5">
-              <NeedsYourCallCard />
-            </div>
+            <CaseFileFeed />
           </aside>
         </div>
         )}

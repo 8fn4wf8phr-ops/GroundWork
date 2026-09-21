@@ -45,5 +45,10 @@ service cloud.firestore {
       allow read, update, delete: if isOwner(resource.data.ownerId);
       allow create: if isOwnerOnCreate();
     }
+
+    match /caseFileEntries/{entryId} {
+      allow read, update, delete: if isOwner(resource.data.ownerId);
+      allow create: if isOwnerOnCreate();
+    }
   }
 }

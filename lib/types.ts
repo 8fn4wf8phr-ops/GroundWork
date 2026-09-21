@@ -162,3 +162,25 @@ export type Contact = {
 // A joined view for the dashboard — an Application with its Job data
 // attached, since the board renders on company/title, not raw IDs.
 export type ApplicationWithJob = Application & { job: Job | undefined }
+
+// Spec §7-8 — every agent action posts a short note to a shared,
+// chronological case file, in that agent's voice. The numeric matchScore
+// on Job is never rewritten by this system — it stays the deterministic
+// ground truth; these entries narrate and reason about it, they don't
+// replace it. When two agents can't reconcile, the exchange escalates:
+// needsYourCall is set, and the user's resolution is recorded rather than
+// either agent unilaterally winning.
+export type AgentName = "Sage" | "Scout" | "Compass" | "Quill" | "Ledger" | "Lens"
+
+export type CaseFileEntry = {
+  id: string
+  ownerId: string
+  agent: AgentName
+  message: string
+  createdAt: string
+  jobId?: string
+  applicationId?: string
+  needsYourCall?: boolean
+  resolvedAt?: string
+  resolution?: string
+}

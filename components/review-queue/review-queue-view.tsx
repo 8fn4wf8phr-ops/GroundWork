@@ -12,6 +12,8 @@ import { fetchJobicyJobsForProfile } from "@/lib/discovery/jobicy"
 import { fetchThemuseJobs } from "@/lib/discovery/themuse"
 import { saveDiscoveredJobs, dismissJob } from "@/lib/firestore/jobs"
 import { createApplicationFromJob } from "@/lib/firestore/applications"
+import { createCaseFileEntries } from "@/lib/firestore/case-file"
+import { reviewTopNewJobs } from "@/lib/agents/review-jobs"
 import type { DiscoveredJob } from "@/lib/discovery/types"
 import type { Job, Profile } from "@/lib/types"
 
@@ -130,12 +132,26 @@ export default function ReviewQueueView() {
     setPullMessage(null)
     try {
       const postings = await source.fetch(profile ?? EMPTY_PROFILE)
-      const added = await saveDiscoveredJobs(user.uid, postings, profile ?? EMPTY_PROFILE)
-      setPullMessage(
-        added === 0
-          ? `Pulled ${postings.length} postings from ${source.label} — no new ones since last time.`
-          : `Added ${added} new posting${added === 1 ? "" : "s"} from ${source.label}.`,
+      const { savedJobs, savedDiscovered, existingJobs } = await saveDiscoveredJobs(
+        user.uid,
+        postings,
+        profile ?? EMPTY_PROFILE,
       )
+      setPullMessage(
+        savedJobs.length === 0
+          ? `Pulled ${postings.length} postings from ${source.label} — no new ones since last time.`
+          : `Added ${savedJobs.length} new posting${savedJobs.length === 1 ? "" : "s"} from ${source.label}.`,
+      )
+      if (savedJobs.length > 0 && profile) {
+        try {
+          const entries = await reviewTopNewJobs(savedJobs, savedDiscovered, existingJobs, profile)
+          if (entries.length > 0) await createCaseFileEntries(user.uid, entries)
+        } catch {
+          // Agent commentary is a bonus layer on top of real, already-saved
+          // Jobs — a failure here shouldn't block the pull itself or hide
+          // that the postings landed successfully.
+        }
+      }
     } catch (err) {
       setPullMessage(
         err instanceof Error

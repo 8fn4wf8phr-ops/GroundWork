@@ -8,8 +8,11 @@ because most of them wouldn't have shown up in a type-check.
 A theme worth naming up front: almost nothing here was declared done on
 the strength of `tsc --noEmit` or a clean build alone. Every feature was
 driven end-to-end with a real signed-up account against the real Firebase
-project and, once Discovery started, real live API calls — no mocks. That
-discipline is what actually caught the bugs below; several of them
+project and, once Discovery started, real live API calls. Where a piece
+couldn't be tested that way, it was tested in isolation against
+hand-computed expectations or adversarial synthetic input first, and the
+one place a mock stood in for a real service is called out in Section 17.
+That discipline is what actually caught the bugs below; several of them
 compiled fine and looked correct on read-through.
 
 ## 1. Starting point
@@ -147,14 +150,163 @@ one button per source to a single source dropdown + one "Pull new
 postings" button — four hardcoded buttons was the point where that
 stopped being the right shape.
 
+## 10. Follow-up reminders
+
+Applications stuck in "Applied" past 10 business days with no response,
+or past a manually-set `followUpDate`, surface in an amber banner above
+the Kanban board (spec §10). The business-day and date-parsing logic was
+verified with isolated test cases first — including a timezone edge case,
+the kind of thing that passes on a developer's machine and misfires for
+someone a few hours west — and only then wired into the UI and confirmed
+live against real overdue, recent, and manual-override scenarios.
+
+## 11. Analytics
+
+Response, interview, and offer rates, sliced by channel and by source
+(spec §9/§14/§15). Rate computation was checked against hand-computed
+expected values, edge cases included, before any UI existed. The meters
+use a single-hue fill validated for contrast against the existing dark
+theme instead of introducing a new palette.
+
+## 12. Resume storage
+
+Summary, experience (each bullet stored individually), skills, education,
+certifications, and a projects bank — the last piece of Phase 1. Resume
+is a uid-keyed singleton like Profile, so the null-`resource` rules bug
+from Section 3 was already a known shape: it got fixed on the `resumes`
+collection *before* it could bite, rather than after.
+
+Resume also nests arrays of objects with optional fields, which the flat
+`sanitizeForFirestore()` from Section 4 couldn't protect, so it became
+recursive. Verified by round-tripping every field — nested experience
+bullets and project skill tags included — through a page reload.
+
+An earlier version of this journal listed resume storage as gated on the
+Blaze plan. That was wrong: it's plain Firestore and never needed it.
+
+## 13. Delete-account, rejection patterns, and The Muse
+
+Three independent pieces that shipped together:
+
+- **Delete everything** (spec §5): wipes every Firestore document tied to
+  the account, then deletes the Firebase Auth user itself. Verified by
+  confirming that re-authenticating with the same credentials fails
+  afterward — "deleted" is only true if there's nothing left to sign
+  back into.
+- **Rejection-reason patterns** (spec §14): normalized exact-match
+  grouping in Analytics, plus autocomplete on the rejection-reason field
+  so reasons converge at the source instead of sprawling.
+- **The Muse** as the fifth source. This closes the item Section 9's
+  earlier list left open: `category=Engineering` returned nothing because
+  that category doesn't exist — "Software Engineering" does. The fix was
+  pulling real category values out of live, unfiltered results instead of
+  guessing a second time. It filters by location (the one reliable
+  structured param) and leaves relevance to the existing scoring.
+
+## 14. A deploy failure that wasn't in the code
+
+Vercel's build failed even though everything worked locally.
+`package.json` pinned `packageManager: pnpm@12.3.4` alongside a
+`pnpm-lock.yaml` that had drifted out of sync — while `npm install` had
+been the tool actually used all along and pnpm was never installed
+locally. Vercel honored the pin and choked on the stale lockfile.
+Removed the pnpm pin, lockfile, and workspace config; npm plus
+`package-lock.json` (already accurate) is now the only package manager
+in play. A local build can't catch this kind of bug, since it depends on
+what the *deploy* environment decides to trust.
+
+## 15. The agent system: Compass and Scout
+
+Until now the Case File feed was hardcoded placeholder text. This
+replaced it with a real one, backed by a `caseFileEntries` collection
+and a server-side route (`app/api/agents/review-jobs`) that calls Claude
+Sonnet 5 with structured outputs (Zod + `messages.parse`). Sonnet was
+chosen over Opus for cost, after asking explicitly rather than assuming.
+
+The design rule that shaped everything after it: **compute first, let the
+LLM narrate.**
+
+- **Compass** narrates the match score that `computeMatchScore()` already
+  produced. The LLM never generates or overwrites the number.
+- **Scout** pushes back only on facts that can be computed
+  (`lib/agents/concern-signals.ts`): a company-and-title repeat across
+  sources, or an unusually short description. It never invents a concern.
+- Compass then either revises or concedes, and the exchange resolves in
+  the open — or holds firm (`standsFirm`, the model's own structured
+  decision), which is the only thing that sets `needsYourCall` and
+  escalates to a real, resolvable card. Neither agent quietly wins.
+
+It runs automatically on the top three newly-discovered jobs per Review
+Queue pull, the "three" from spec §2's narrative, which also keeps both
+cost and feed noise in check.
+
+Live discovery data is luck-dependent for hitting the disagreement
+branch, so verification went in layers: the signal detection alone, the
+full multi-turn exchange against synthetic input, the real narration
+path against live postings (zero console errors), and the escalation
+card's render and resolution against a real Firestore entry.
+
+## 16. Quill: tailoring without inventing
+
+Quill tailors a resume and cover letter per posting (spec §7, §16), and
+the risk is obvious: a model asked to "tailor a resume" will happily
+fabricate experience. So it doesn't get to. It references bullets and
+projects **by ID or index**, and the server resolves those references
+against the stored Resume, silently dropping anything out of range or
+made up. Only the summary and cover letter are genuinely generated text,
+and both are instructed to stay within the given facts.
+
+That guarantee was verified structurally, with adversarial input —
+out-of-range indices, fabricated skills — before trusting it against live
+generations, since "the model usually behaves" isn't a property you can
+demo your way to.
+
+It's staged for review in the Application detail modal ("Tailor
+application"). The cover letter is editable (spec §2's "tweak one
+sentence"), and the edit is kept separate from the generated version so
+regenerating can't silently overwrite a manual change.
+
+## 17. Sage, Ledger, Lens, and the portfolio sync
+
+The remaining three agents, each following Section 15's rule:
+
+- **Sage** checks in only when `detectSageSignal()` finds an objective
+  gap — no target roles, or target roles with no experience. Two checks,
+  deliberately, and no fuzzy judgment calls.
+- **Ledger** narrates real Application status transitions
+  (`app/api/agents/ledger-log`). It's triggered from the detail modal's
+  `save()` as a best-effort layer whose errors are swallowed, so a failed
+  narration can never fail the real Firestore write underneath it.
+- **Lens** surfaces a real channel or source response-rate gap
+  (`detectNotablePattern()`). When the leading group's sample is small
+  (`lowConfidence`), Ledger pushes back on statistical grounds and the
+  exchange escalates immediately — spec §2/§8's own literal example.
+
+**Sixth bug:** the "Needs your call" card for a Lens/Ledger disagreement
+showed *Sage* as the other side. `NeedsYourCallCard` paired entries by
+`jobId` alone, and Lens/Ledger exchanges have no natural Job — so every
+unrelated entry with an undefined `jobId` "matched." Fixed by adding a
+`threadId` to `CaseFileEntry` and matching on `jobId` OR `threadId`. The
+comparison also had to be `<=`, not `<`: entries from one batch write
+share a timestamp, and a strict comparison excluded the very entries it
+was meant to pair.
+
+**Portfolio sync** (spec §16): Resume can import Projects from a
+portfolio site's `projects.json`, merging by a stable `sourceId` so a
+re-sync updates existing entries instead of duplicating them. This is the
+one place a stand-in was used: the target site doesn't serve that
+endpoint yet, so it was verified against a local mock server fed with
+real data scraped from the live site. The real endpoint is untested until
+that file is published.
+
 ## What this leaves for next time
 
 - **USAJobs** — needs registration (government API key).
-- **The Muse** — public and keyless, but its category-filtering taxonomy
-  didn't resolve on the first attempt (`category=Engineering` returned
-  zero results) and wasn't worth guessing further at without a working
-  example to test against.
 - **We Work Remotely** — no real JSON API found, RSS-based.
-- **Resume storage** and **scheduled (Cloud Function) discovery** — both
-  gated on upgrading the Firebase project to the Blaze plan, a real
-  billing decision left for whenever that tradeoff is worth making.
+- **Scheduled (Cloud Function) discovery** — gated on upgrading the
+  Firebase project to the Blaze plan, a real billing decision left for
+  whenever that tradeoff is worth making. Discovery today runs only when
+  the user pulls.
+- **Portfolio `projects.json`** — the sync is built and mock-verified,
+  but the live endpoint doesn't exist yet, so the real fetch has never
+  run.

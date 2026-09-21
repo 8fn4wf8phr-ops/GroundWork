@@ -293,11 +293,17 @@ was meant to pair.
 
 **Portfolio sync** (spec §16): Resume can import Projects from a
 portfolio site's `projects.json`, merging by a stable `sourceId` so a
-re-sync updates existing entries instead of duplicating them. This is the
-one place a stand-in was used: the target site doesn't serve that
-endpoint yet, so it was verified against a local mock server fed with
-real data scraped from the live site. The real endpoint is untested until
-that file is published.
+re-sync updates existing entries instead of duplicating them. This was the
+one place a stand-in was used: the target site didn't serve that endpoint
+yet, so the first pass was verified against a local mock server fed with
+real data scraped from the live site.
+
+It has since been verified against the real thing. The file went live on
+the portfolio site with a CORS header (the sync fetches from the browser,
+and Vercel doesn't add `Access-Control-Allow-Origin` to static files by
+default), the real fetch-and-merge code was run against it — including a
+re-sync that left IDs unchanged and duplicated nothing — and the sync
+button was then confirmed working in a real browser session.
 
 ## What this leaves for next time
 
@@ -307,6 +313,3 @@ that file is published.
   Firebase project to the Blaze plan, a real billing decision left for
   whenever that tradeoff is worth making. Discovery today runs only when
   the user pulls.
-- **Portfolio `projects.json`** — the sync is built and mock-verified,
-  but the live endpoint doesn't exist yet, so the real fetch has never
-  run.

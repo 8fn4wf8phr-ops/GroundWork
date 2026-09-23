@@ -19,9 +19,9 @@ editing, Profile, Contacts, CSV export.
 
 **Phase 2 (Discovery + Matching) — in progress.** Review Queue with
 pursue/dismiss, keyword-overlap match scoring, 4 of 7 spec-listed job
-sources wired (Arbeitnow, Adzuna, RemoteOK, Jobicy). Scheduling is
-manual ("Pull new postings" button) rather than a Cloud Function — see
-[Scheduling](#scheduling-not-yet-automatic) below.
+sources wired (Arbeitnow, Adzuna, RemoteOK, Jobicy). Pulling is a manual
+"Pull new postings" click, or opt-in daily via Vercel Cron — see
+[Scheduling](#scheduling-daily-opt-in) below.
 
 **Not started:** structured Resume storage/parsing, cover letter
 tailoring, follow-up reminders, referral/channel analytics, the browser
@@ -90,21 +90,37 @@ holds the key server-side; the browser calls that route instead of
 `api.adzuna.com` directly. Arbeitnow, RemoteOK, and Jobicy need no key
 at all, so they're called directly from the browser.
 
-## Scheduling (not yet automatic)
+## Scheduling (daily, opt-in)
 
-The spec's target architecture runs Discovery as a scheduled Cloud
-Function (spec §13). That requires upgrading the Firebase project to
-the pay-as-you-go Blaze plan. For now, pulling new postings is a manual
-button click in the Review Queue — same fetching and scoring logic,
-just user-triggered instead of overnight. Upgrading to a real schedule
-later doesn't require rewriting this logic, just wrapping it in a
-Cloud Function.
+The manual "Pull new postings" button always works. Separately, a user can
+turn on **Daily discovery** in the Profile view; a Vercel Cron job
+(`vercel.json`, 13:00 UTC) then calls `/api/cron/discover`, which for each
+opted-in user pulls Adzuna and/or Arbeitnow, keeps only postings that score
+30+ against their Profile (max 25 a day), and has Compass/Scout comment on
+the top three in the Case File. It never applies to anything.
+
+This needs no Blaze plan — it's a Next.js route, not a Cloud Function —
+but it does need two server-only secrets (see `.env.local.example`):
+
+- `CRON_SECRET` — Vercel sends it as a Bearer token; the route refuses
+  every request without it (and refuses all requests if it's unset).
+- `FIREBASE_SERVICE_ACCOUNT` — a service-account key. The server has no
+  signed-in user, so it uses the Firebase Admin SDK, which **bypasses
+  Firestore security rules**. Every query in `lib/server/admin-store.ts`
+  is therefore scoped to the owner by hand. Treat the key like a password
+  and mark it Sensitive on Vercel.
+
+To try it without waiting for the cron: with both set,
+`curl -H "Authorization: Bearer $CRON_SECRET" "https://<your-app>/api/cron/discover?force=1"`
+(`force=1` skips the once-per-20-hours guard).
 
 ## Project structure
 
 ```
 app/
   api/discovery/adzuna/route.ts   — server-side Adzuna proxy
+  api/agents/*                    — agent routes (require a signed-in user)
+  api/cron/discover/route.ts      — daily discovery (Vercel Cron only)
   layout.tsx, page.tsx            — wraps the app in AuthProvider
 components/
   applications-dashboard.tsx      — the shell: nav rail, header, view switch

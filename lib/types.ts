@@ -82,6 +82,24 @@ export type Application = {
 
 // One per user, keyed by the Firebase Auth uid (not a generated id) — the
 // spec is explicit that this is a singleton per owner, not a collection.
+// Opt-in settings for the daily scheduled discovery (see
+// lib/server/scheduled-discovery.ts). Lives on the Profile document so it
+// needs no new Firestore rules; the cron writes lastRunAt/lastRunSummary
+// back with the Admin SDK. Only the sources listed here are pulled.
+export type ScheduledSourceId = "adzuna" | "arbeitnow"
+
+export const SCHEDULED_SOURCES: { id: ScheduledSourceId; label: string }[] = [
+  { id: "adzuna", label: "Adzuna" },
+  { id: "arbeitnow", label: "Arbeitnow" },
+]
+
+export type ScheduledDiscoverySettings = {
+  enabled: boolean
+  sources: ScheduledSourceId[]
+  lastRunAt?: string
+  lastRunSummary?: string
+}
+
 export type Profile = {
   ownerId: string
   name: string
@@ -92,6 +110,7 @@ export type Profile = {
   salaryFloor?: number
   mustHaves: string[]
   dealBreakers: string[]
+  scheduledDiscovery?: ScheduledDiscoverySettings
   updatedAt: string
 }
 

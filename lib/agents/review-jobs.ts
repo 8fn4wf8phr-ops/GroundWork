@@ -1,7 +1,7 @@
 import type { NewCaseFileEntry } from "@/lib/firestore/case-file"
 import type { Job, Profile } from "@/lib/types"
 import { clip, postAgent } from "@/lib/agents/client"
-import { detectConcernSignal } from "@/lib/agents/concern-signals"
+import { buildReviewPayload } from "@/lib/agents/review-payload"
 
 // Spec §2's day-in-the-life narrative uses "three" as the number of
 // strong matches surfaced for review — kept here as the cap on how many
@@ -24,15 +24,7 @@ export async function reviewTopNewJobs(
 
   if (topJobs.length === 0) return []
 
-  const jobsPayload = topJobs.map((job) => ({
-    jobId: job.id,
-    title: clip(job.title, 300),
-    company: clip(job.company, 300),
-    location: clip(job.location, 300),
-    matchScore: job.matchScore ?? 0,
-    matchReasons: (job.matchReasons ?? []).slice(0, 20).map((r) => clip(r, 300)),
-    concernSignal: detectConcernSignal(job, existingJobs),
-  }))
+  const jobsPayload = topJobs.map((job) => buildReviewPayload(job, existingJobs))
 
   const { entries } = await postAgent<{ entries: NewCaseFileEntry[] }>(
     "/api/agents/review-jobs",

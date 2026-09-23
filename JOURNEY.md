@@ -381,11 +381,94 @@ an invented employer or degree; for those, the cover letter being
 staged, editable, and never submitted automatically is still the real
 safeguard.
 
+## 19. Scheduled discovery
+
+Discovery had only ever run when the user clicked "Pull new postings".
+The spec (§13) imagines a scheduled Cloud Function, and this journal
+kept saying that needed the Blaze plan. That is true of Cloud Functions
+and not of the goal: a Vercel Cron job hitting a Next.js route does the
+same work with no plan change. (Vercel's documentation confirms the
+`vercel.json` `crons` shape and the `CRON_SECRET` bearer header; it didn't
+answer the Hobby-plan frequency limit, so the schedule is daily and that
+limit is unverified.)
+
+The real obstacle was never scheduling. Every piece of discovery ran *as
+the signed-in user, in their browser*: the fetchers, the Firestore writes
+under security rules, and the agent review authorized by their ID token.
+A timer has no user. So:
+
+- **Admin SDK, and what it costs.** The cron uses `firebase-admin` with a
+  service-account key, which **bypasses Firestore security rules
+  entirely**. The rules that guarantee ownership in the browser don't
+  exist on that path, so `lib/server/admin-store.ts` re-creates them by
+  hand: every query is keyed to a uid taken from a Profile document's own
+  id, and every write is stamped with that ownerId. The key is refused if
+  its project doesn't match the app's, since the failure mode there is
+  quietly writing another project's data.
+- **Opt-in, per user.** Settings live on the Profile document
+  (`scheduledDiscovery`), so no rules change was needed. That forced a fix
+  to `saveProfile()`, which used a plain `setDoc` and would have wiped the
+  settings (including the cron's `lastRunAt`) on every Profile save. It
+  now merges — and because merge leaves a cleared field behind, the two
+  optional fields (phone, salary floor) are deleted explicitly. Both
+  halves were checked in a browser: saving the form keeps the settings,
+  and clearing the phone still removes it.
+- **Not a manual pull on a timer.** A manual pull saves every posting it
+  finds (Arbeitnow returns ~250). Unattended and daily, that would bury
+  the Review Queue, so scheduled runs keep only postings scoring 30+, at
+  most 25 a day, and reuse the same top-3 Compass/Scout review. Dedup
+  covers dismissed jobs too, since a dismissed Job stays in Firestore.
+- **Shared code instead of a second copy.** The review exchange moved
+  out of its route into `lib/server/review-jobs.ts`, the Adzuna call into
+  `lib/server/adzuna-api.ts`, and the Adzuna mapping into a pure module —
+  because the client fetcher imported the Firebase client SDK, which
+  would have followed it into the server bundle.
+- **The cron endpoint fails closed.** No `CRON_SECRET` configured means
+  every request is refused, not that the route is open; comparison is
+  constant-time.
+
+**What was verified, and in what order.** The orchestration sits behind a
+small store interface precisely so it could be tested without
+credentials first: dedupe, the score threshold and cap, idempotency (a
+forced second run against a *closed* candidate set saves and reviews
+nothing), the 20-hour guard, one source or one agent failing without
+losing the rest, and per-user isolation — all against an in-memory store
+using the real scoring, signal and payload code. The cron route's auth
+and config gates were exercised through the real handler, and the
+settings UI was driven in a browser.
+
+Getting a working `FIREBASE_SERVICE_ACCOUNT` into `.env.local` was its
+own small saga — a multi-line paste once corrupted the file, then a
+partial copy landed just the inner body of the private key with no JSON
+structure around it. Both looked superficially plausible without
+decoding; the fix was validating by actually running `base64.b64decode`
+and `json.loads` against the stored value, not eyeballing it, and
+eventually writing the value programmatically (reading the source
+`.json` and re-encoding it) rather than trusting another manual
+clipboard round-trip.
+
+With that in place, the whole pipeline ran for real: a seeded user with
+`scheduledDiscovery` enabled, called through the real HTTP route,
+against real Firestore, real Adzuna/Arbeitnow APIs, and a real Compass/
+Scout review — saved jobs scored 50-75 with real titles and companies,
+three genuine case-file entries, and `scheduledDiscovery.lastRunAt` /
+`lastRunSummary` updated to match. A forced second call surfaced 25 more
+real jobs rather than zero, which corrected an assumption rather than
+finding a bug: Adzuna and Arbeitnow together have far more than 25
+live postings matching "Frontend Engineer," so a cap smaller than the
+candidate pool means consecutive forced runs keep surfacing genuinely
+new-to-this-account postings rather than converging on empty. What
+dedup actually guarantees — checked directly against the 50 saved
+jobs — is that it never saves the same posting twice; all 50 had
+distinct dedupe keys. The unforced call right after was correctly
+skipped ("ran 0.0h ago"). Every document and the auth account were then
+deleted and confirmed gone.
+
 ## What this leaves for next time
 
 - **USAJobs** — needs registration (government API key).
 - **We Work Remotely** — no real JSON API found, RSS-based.
-- **Scheduled (Cloud Function) discovery** — gated on upgrading the
-  Firebase project to the Blaze plan, a real billing decision left for
-  whenever that tradeoff is worth making. Discovery today runs only when
-  the user pulls.
+- **Scheduled discovery is verified locally (Section 19) but not on
+  Vercel yet** — `CRON_SECRET` and `FIREBASE_SERVICE_ACCOUNT` need to be
+  set there too (Sensitive), and the actual Vercel Cron trigger has never
+  fired; only a manual `?force=1` call has been observed.

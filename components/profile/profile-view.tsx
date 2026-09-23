@@ -11,6 +11,7 @@ import { detectSageSignal } from "@/lib/agents/sage-signals"
 import { checkInWithSage } from "@/lib/agents/sage"
 import TagListInput from "@/components/profile/tag-list-input"
 import DeleteAccountSection from "@/components/profile/delete-account-section"
+import ScheduledDiscoverySection from "@/components/profile/scheduled-discovery-section"
 
 export default function ProfileView() {
   const { user } = useAuth()
@@ -227,6 +228,8 @@ export default function ProfileView() {
           </p>
         )}
       </div>
+
+      <ScheduledDiscoverySection />
 
       <DeleteAccountSection />
     </div>

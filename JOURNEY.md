@@ -464,11 +464,42 @@ distinct dedupe keys. The unforced call right after was correctly
 skipped ("ran 0.0h ago"). Every document and the auth account were then
 deleted and confirmed gone.
 
+## 20. Getting scheduled discovery onto Vercel
+
+Setting `CRON_SECRET` and `FIREBASE_SERVICE_ACCOUNT` on Vercel surfaced
+a second copy-paste bug, but not a repeat of the earlier one — the
+opposite failure mode. `FIREBASE_SERVICE_ACCOUNT` was diagnosed by
+actually decoding and parsing it (Section 19); `CRON_SECRET` looked
+fine by every check that mattered (right length, no whitespace, no
+quotes) and still turned out to be wrong: it had been generated or
+copied with literal angle brackets around it — `<…64 hex chars…>` — 66
+characters that passed a length-only glance without incident. It worked
+locally only because both sides of the comparison (the test script and
+the dev server) read the same bracketed value from the same file,
+which proved nothing about whether the value was actually correct — a
+reminder that "both sides agree" and "the value is right" are different
+claims when both sides share a source. It surfaced for real the moment
+the same value went to Vercel and got compared against a client that
+built its own header independently: 401 instead of the 503 an
+unconfigured secret would give, meaning the two sides now genuinely
+disagreed. Fixed by generating a clean secret and setting it in both
+places from that single generation, rather than patching the old one.
+
+Setting the env vars alone wasn't enough to take effect — Vercel
+captures a serverless function's environment at deploy time, not read
+freshly on every request, so the already-READY deployment from Section
+19's push kept running without them. A redeploy of the same commit
+(inheriting env vars fresh) was required, and confirmed by testing
+`/api/cron/discover` against the live `groundwork-six-ochre.vercel.app`
+domain before and after: 401 with no token, then a real run — 25 jobs
+saved, 3 reviewed by Compass and Scout, `scheduledDiscovery` updated —
+against a throwaway account created and fully deleted for the test.
+
 ## What this leaves for next time
 
 - **USAJobs** — needs registration (government API key).
 - **We Work Remotely** — no real JSON API found, RSS-based.
-- **Scheduled discovery is verified locally (Section 19) but not on
-  Vercel yet** — `CRON_SECRET` and `FIREBASE_SERVICE_ACCOUNT` need to be
-  set there too (Sensitive), and the actual Vercel Cron trigger has never
-  fired; only a manual `?force=1` call has been observed.
+- **Scheduled discovery is verified against real Firestore and real
+  production (Sections 19-20)**, but only via a manual `?force=1` call —
+  the actual Vercel Cron trigger (13:00 UTC daily) has never fired on its
+  own yet.

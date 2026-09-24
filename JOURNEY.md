@@ -574,11 +574,49 @@ to orchestration, scoring, or the settings UI (Section 21's point:
 building against a generic `Fetchers` map means adding a source is
 additive, not invasive).
 
+## 23. We Work Remotely
+
+The last spec-listed source, and the one previously written off as "RSS
+only, no JSON API" — true, but that just meant parsing RSS instead of
+JSON, not that it couldn't be built. No key needed (the feed is public),
+but confirmed live it sends no `Access-Control-Allow-Origin` header, so
+a browser fetch to `weworkremotely.com` is blocked the same way USAJobs
+is — needs a server-side proxy route for CORS reasons even with nothing
+secret to protect. `app/api/discovery/wwr/route.ts` still gates on
+`requireUser` anyway, so it can't become an open way to scrape WWR
+through the app's own domain.
+
+The feed itself (`https://weworkremotely.com/categories/remote-programming-jobs.rss`)
+turned out to have one wrinkle: descriptions are HTML that's been
+entity-escaped once to stay valid XML (`&lt;p&gt;` in the raw feed, not
+`<p>`), confirmed by fetching it live and inspecting a real item. The
+existing `stripHtml` helper only strips actual `<tag>` syntax, so it was
+silently a no-op on entity-escaped markup — decoding entities first
+(`lib/discovery/wwr-map.ts`) was necessary before `stripHtml` could see
+real tags to remove. Titles arrive as `"Company: Position"` in one
+string with no separate company field, split on the first `": "`.
+
+No per-role query support exists — WWR's feeds are fixed per category,
+not keyword-searchable — so, same tradeoff as Arbeitnow, this pulls the
+whole Programming category and leaves relevance to the existing
+title-overlap scoring rather than trying to filter server-side.
+
+Verified end-to-end before wiring in: 25 real, correctly-parsed postings
+(title/company split, HTML-decoded descriptions, real `postingUrl`s)
+straight from the live feed, then the same result through the actual
+authenticated proxy route on a running dev server (401 without a token,
+200 with one, using a throwaway Firebase account deleted immediately
+after). Wired into the manual pull, the scheduled-discovery source list,
+and the cron's fetcher map — same zero-change-to-orchestration pattern
+as RemoteOK/Jobicy/The Muse and USAJobs before it.
+
+All 7 spec-listed discovery sources are now live: Arbeitnow, Adzuna,
+RemoteOK, Jobicy, The Muse, USAJobs, We Work Remotely.
+
 ## What this leaves for next time
 
-- **We Work Remotely** — no real JSON API found, RSS-based. The only
-  spec-listed source left unbuilt.
 - **Scheduled discovery is verified against real Firestore and real
   production (Sections 19-20)**, but only via a manual `?force=1` call —
   the actual Vercel Cron trigger (13:00 UTC daily) has never fired on its
   own yet.
+- The browser extension (spec-mentioned, not started).

@@ -11,6 +11,7 @@ import { fetchRemoteOkJobs } from "@/lib/discovery/remoteok"
 import { fetchJobicyJobsForProfile } from "@/lib/discovery/jobicy"
 import { fetchThemuseJobs } from "@/lib/discovery/themuse"
 import { fetchUsajobsForProfile } from "@/lib/discovery/usajobs"
+import { fetchWeWorkRemotelyJobs } from "@/lib/discovery/wwr"
 import { saveDiscoveredJobs, dismissJob } from "@/lib/firestore/jobs"
 import { createApplicationFromJob } from "@/lib/firestore/applications"
 import { createCaseFileEntries } from "@/lib/firestore/case-file"
@@ -18,7 +19,7 @@ import { reviewTopNewJobs } from "@/lib/agents/review-jobs"
 import type { DiscoveredJob } from "@/lib/discovery/types"
 import type { Job, Profile } from "@/lib/types"
 
-type SourceId = "arbeitnow" | "adzuna" | "remoteok" | "jobicy" | "themuse" | "usajobs"
+type SourceId = "arbeitnow" | "adzuna" | "remoteok" | "jobicy" | "themuse" | "usajobs" | "weworkremotely"
 
 const SOURCES: { id: SourceId; label: string; fetch: (profile: Profile) => Promise<DiscoveredJob[]> }[] = [
   { id: "arbeitnow", label: "Arbeitnow", fetch: () => fetchArbeitnowJobs() },
@@ -27,6 +28,7 @@ const SOURCES: { id: SourceId; label: string; fetch: (profile: Profile) => Promi
   { id: "themuse", label: "The Muse", fetch: (profile) => fetchThemuseJobs(profile) },
   { id: "jobicy", label: "Jobicy", fetch: (profile) => fetchJobicyJobsForProfile(profile) },
   { id: "usajobs", label: "USAJobs", fetch: (profile) => fetchUsajobsForProfile(profile) },
+  { id: "weworkremotely", label: "We Work Remotely", fetch: () => fetchWeWorkRemotelyJobs() },
 ]
 
 function MatchScoreBadge({ score }: { score?: number }) {

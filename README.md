@@ -18,18 +18,18 @@ manual application entry with duplicate detection, application detail
 editing, Profile, Contacts, CSV export.
 
 **Phase 2 (Discovery + Matching) — complete.** Review Queue with
-pursue/dismiss, keyword-overlap match scoring, 6 of 7 spec-listed job
-sources wired (Arbeitnow, Adzuna, RemoteOK, Jobicy, The Muse, USAJobs).
-Pulling is a manual "Pull new postings" click, or opt-in daily via
-Vercel Cron — see [Scheduling](#scheduling-daily-opt-in) below.
+pursue/dismiss, keyword-overlap match scoring, all 7 spec-listed job
+sources wired (Arbeitnow, Adzuna, RemoteOK, Jobicy, The Muse, USAJobs,
+We Work Remotely). Pulling is a manual "Pull new postings" click, or
+opt-in daily via Vercel Cron — see [Scheduling](#scheduling-daily-opt-in)
+below.
 
 **Also complete:** the real six-agent system (Compass, Scout, Sage,
 Quill, Ledger, Lens — see JOURNEY.md §15-17), structured Resume storage,
 resume/cover-letter tailoring, follow-up reminders, referral/channel
 Analytics, and portfolio project sync.
 
-**Not started:** We Work Remotely (RSS only, no JSON API found) and the
-browser extension.
+**Not started:** the browser extension.
 
 ## Tech stack
 
@@ -91,21 +91,28 @@ tied to your account's rate quota, with nothing downstream protecting
 it. Shipping it in a `NEXT_PUBLIC_*` var would let anyone pull it out of
 the browser bundle and burn your quota. `app/api/discovery/adzuna/route.ts`
 holds the key server-side; the browser calls that route instead of
-`api.adzuna.com` directly. Arbeitnow, RemoteOK, and Jobicy need no key
-at all, so they're called directly from the browser.
+`api.adzuna.com` directly. USAJobs needs the same treatment for the same
+reason (`app/api/discovery/usajobs/route.ts`). Arbeitnow, RemoteOK, and
+Jobicy need no key at all, so they're called directly from the browser —
+but We Work Remotely, despite also needing no key, still goes through
+`app/api/discovery/wwr/route.ts`: it has no CORS header (confirmed live),
+so a browser fetch to `weworkremotely.com` is blocked regardless.
 
 ## Scheduling (daily, opt-in)
 
 The manual "Pull new postings" button always works. Separately, a user can
 turn on **Daily discovery** in the Profile view; a Vercel Cron job
 (`vercel.json`, 13:00 UTC) then calls `/api/cron/discover`, which for each
-opted-in user pulls from whichever of the five sources they've checked
-(Adzuna, Arbeitnow, RemoteOK, Jobicy, The Muse), keeps only postings that
-score 30+ against their Profile (max 25 a day), and has Compass/Scout
-comment on the top three in the Case File. It never applies to anything.
+opted-in user pulls from whichever of the seven sources they've checked
+(Adzuna, Arbeitnow, RemoteOK, Jobicy, The Muse, USAJobs, We Work
+Remotely), keeps only postings that score 30+ against their Profile
+(max 25 a day), and has Compass/Scout comment on the top three in the
+Case File. It never applies to anything.
 
 This needs no Blaze plan — it's a Next.js route, not a Cloud Function —
-but it does need two server-only secrets (see `.env.local.example`):
+but it does need two server-only secrets (see `.env.local.example`); a third,
+`USAJOBS_API_KEY`/`USAJOBS_USER_AGENT`, is only needed if USAJobs is one
+of the checked sources:
 
 - `CRON_SECRET` — Vercel sends it as a Bearer token; the route refuses
   every request without it (and refuses all requests if it's unset).
@@ -123,7 +130,7 @@ To try it without waiting for the cron: with both set,
 
 ```
 app/
-  api/discovery/adzuna/route.ts   — server-side Adzuna proxy
+  api/discovery/*/route.ts        — server-side proxies (Adzuna, USAJobs, We Work Remotely)
   api/agents/*                    — agent routes (require a signed-in user)
   api/cron/discover/route.ts      — daily discovery (Vercel Cron only)
   layout.tsx, page.tsx            — wraps the app in AuthProvider

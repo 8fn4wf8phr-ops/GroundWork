@@ -8,6 +8,8 @@ import { fetchJobicyJobsForProfile } from "@/lib/discovery/jobicy"
 import { fetchThemuseJobs } from "@/lib/discovery/themuse"
 import { fetchUsajobsForProfile } from "@/lib/discovery/usajobs-map"
 import { callUsajobs } from "@/lib/server/usajobs-api"
+import { fetchWeWorkRemotelyJobs } from "@/lib/discovery/wwr-map"
+import { callWwr } from "@/lib/server/wwr-api"
 import { AdminConfigError, getAdminDb } from "@/lib/server/firebase-admin"
 import { callAdzuna } from "@/lib/server/adzuna-api"
 import { createAdminStore } from "@/lib/server/admin-store"
@@ -56,6 +58,7 @@ export async function GET(request: NextRequest) {
           jobicy: (profile) => fetchJobicyJobsForProfile(profile),
           themuse: (profile) => fetchThemuseJobs(profile),
           usajobs: (profile) => fetchUsajobsForProfile(profile, callUsajobs),
+          weworkremotely: () => fetchWeWorkRemotelyJobs(callWwr),
         },
         reviewer: client ? (jobs, profile) => reviewJobs(client, jobs, profile) : null,
         now: new Date(),

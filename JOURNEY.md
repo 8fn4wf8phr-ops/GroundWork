@@ -531,10 +531,53 @@ naming two sources directly. The settings UI needed no changes either —
 it already renders every entry in `SCHEDULED_SOURCES`, not a hardcoded
 pair.
 
+## 22. USAJobs
+
+The last item on Section 9's original open list. Registration (free, at
+developer.usajobs.gov/apirequest) took a name/email/phone/use-case form
+and returned an `Authorization-Key`, with one wrinkle none of the other
+sources have: the required `User-Agent` header must be the exact email
+address the key was registered under, not an arbitrary string — the
+docs are explicit that this is checked.
+
+Same discipline as every other source: checked the real response shape
+live before writing any mapping code. Two things confirmed, one
+rejected:
+
+- **`Keyword` genuinely filters** (11 results for "software developer"
+  vs. 10,000+ capped/unfiltered), so it gets the same per-target-role
+  querying as Adzuna/Jobicy.
+- **`RemoteIndicator` is a real, reliable boolean** — confirmed by
+  comparing filtered vs. unfiltered counts and checking the field's
+  actual JSON type — so it's the one structured location signal used.
+- **`LocationName` was tested and rejected.** A bare state name like
+  `Florida` returned 1 result while `California` returned 1,588 — not
+  because Florida has fewer federal jobs, but because the parameter
+  needs an exact match against USAJobs' own place-name entries (specific
+  cities, not free-text states), confirmed by testing full "City, State"
+  strings (`Jacksonville, FL` → 226, `Miami, Florida` → 596) against the
+  bare-state failure. This is the same trap The Muse's category filter
+  hit in Section 13 — a structured parameter that looks like it should
+  accept free text but actually needs its own fixed taxonomy. Left
+  unused, same tradeoff Arbeitnow and The Muse make: pull broadly, let
+  the existing scoring algorithm's title-overlap component handle
+  relevance.
+
+Verified end-to-end through the real code path before deploying: 57
+unique, correctly-deduped, real federal postings (Social Security
+Administration, Naval Sea Systems Command, U.S. Army) for a live
+profile's actual target roles, then the same result through the actual
+authenticated proxy route (401 without a token, real results with one).
+Wired into the manual pull, the scheduled-discovery source list, and the
+cron's fetcher map — the third source added that way with zero changes
+to orchestration, scoring, or the settings UI (Section 21's point:
+building against a generic `Fetchers` map means adding a source is
+additive, not invasive).
+
 ## What this leaves for next time
 
-- **USAJobs** — needs registration (government API key).
-- **We Work Remotely** — no real JSON API found, RSS-based.
+- **We Work Remotely** — no real JSON API found, RSS-based. The only
+  spec-listed source left unbuilt.
 - **Scheduled discovery is verified against real Firestore and real
   production (Sections 19-20)**, but only via a manual `?force=1` call —
   the actual Vercel Cron trigger (13:00 UTC daily) has never fired on its

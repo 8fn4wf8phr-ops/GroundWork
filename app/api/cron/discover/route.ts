@@ -6,6 +6,8 @@ import { fetchArbeitnowJobs } from "@/lib/discovery/arbeitnow"
 import { fetchRemoteOkJobs } from "@/lib/discovery/remoteok"
 import { fetchJobicyJobsForProfile } from "@/lib/discovery/jobicy"
 import { fetchThemuseJobs } from "@/lib/discovery/themuse"
+import { fetchUsajobsForProfile } from "@/lib/discovery/usajobs-map"
+import { callUsajobs } from "@/lib/server/usajobs-api"
 import { AdminConfigError, getAdminDb } from "@/lib/server/firebase-admin"
 import { callAdzuna } from "@/lib/server/adzuna-api"
 import { createAdminStore } from "@/lib/server/admin-store"
@@ -53,6 +55,7 @@ export async function GET(request: NextRequest) {
           remoteok: () => fetchRemoteOkJobs(),
           jobicy: (profile) => fetchJobicyJobsForProfile(profile),
           themuse: (profile) => fetchThemuseJobs(profile),
+          usajobs: (profile) => fetchUsajobsForProfile(profile, callUsajobs),
         },
         reviewer: client ? (jobs, profile) => reviewJobs(client, jobs, profile) : null,
         now: new Date(),

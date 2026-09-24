@@ -17,15 +17,19 @@ including the real bugs hit along the way.
 manual application entry with duplicate detection, application detail
 editing, Profile, Contacts, CSV export.
 
-**Phase 2 (Discovery + Matching) — in progress.** Review Queue with
-pursue/dismiss, keyword-overlap match scoring, 4 of 7 spec-listed job
-sources wired (Arbeitnow, Adzuna, RemoteOK, Jobicy). Pulling is a manual
-"Pull new postings" click, or opt-in daily via Vercel Cron — see
-[Scheduling](#scheduling-daily-opt-in) below.
+**Phase 2 (Discovery + Matching) — complete.** Review Queue with
+pursue/dismiss, keyword-overlap match scoring, 6 of 7 spec-listed job
+sources wired (Arbeitnow, Adzuna, RemoteOK, Jobicy, The Muse, USAJobs).
+Pulling is a manual "Pull new postings" click, or opt-in daily via
+Vercel Cron — see [Scheduling](#scheduling-daily-opt-in) below.
 
-**Not started:** structured Resume storage/parsing, cover letter
-tailoring, follow-up reminders, referral/channel analytics, the browser
-extension, USAJobs/The Muse/We Work Remotely sources.
+**Also complete:** the real six-agent system (Compass, Scout, Sage,
+Quill, Ledger, Lens — see JOURNEY.md §15-17), structured Resume storage,
+resume/cover-letter tailoring, follow-up reminders, referral/channel
+Analytics, and portfolio project sync.
+
+**Not started:** We Work Remotely (RSS only, no JSON API found) and the
+browser extension.
 
 ## Tech stack
 

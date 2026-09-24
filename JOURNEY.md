@@ -495,6 +495,42 @@ domain before and after: 401 with no token, then a real run — 25 jobs
 saved, 3 reviewed by Compass and Scout, `scheduledDiscovery` updated —
 against a throwaway account created and fully deleted for the test.
 
+Turning it on for the real account surfaced two more things, neither a
+code defect:
+
+- **Saving the Profile form once wiped `scheduledDiscovery` anyway**,
+  despite the Section 19 merge fix already being live. The likely cause
+  isn't the fix itself — a from-scratch browser check the day before had
+  confirmed it works — but a browser tab open since before a redeploy,
+  quietly running a stale bundle. Re-set and unaffected since; worth
+  a hard refresh before saving Profile right after any deploy.
+- **Arbeitnow contributed zero of the real account's first 25-50 saved
+  jobs**, and checking why ruled out the explanation that seemed obvious
+  at first (that Adzuna's results, queried first, simply filled the cap
+  before Arbeitnow's were considered) — the code pools every source's
+  results and scores them together before picking the top 25, so query
+  order has no effect on the outcome. The real reason: against this
+  profile's actual target roles, only 1 of Arbeitnow's 250 live postings
+  scored above the 30 cutoff (a marginal 42). Arbeitnow's feed skews
+  toward general/European listings that don't overlap well with specific
+  US-based title and location targets — a real limitation of that
+  source for this kind of profile, not a bug in how it's used.
+
+## 21. Scheduled discovery: the other three sources
+
+Scheduled discovery launched with only Adzuna and Arbeitnow wired in.
+Section 20's Arbeitnow finding — 1 qualifying posting out of 250 for a
+real profile — made the gap concrete: RemoteOK, Jobicy, and The Muse
+were already built for the manual pull with the exact same signature
+(`(profile) => Promise<DiscoveredJob[]>`) `Fetchers` expects, so wiring
+them in was purely additive — one line each in the cron's fetcher map,
+plus extending `ScheduledSourceId`. Nothing in the orchestration,
+scoring, dedup, or cap logic needed to change; that was the point of
+building it against a generic `Fetchers` map in Section 19 rather than
+naming two sources directly. The settings UI needed no changes either —
+it already renders every entry in `SCHEDULED_SOURCES`, not a hardcoded
+pair.
+
 ## What this leaves for next time
 
 - **USAJobs** — needs registration (government API key).

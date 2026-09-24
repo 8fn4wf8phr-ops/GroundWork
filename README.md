@@ -95,9 +95,10 @@ at all, so they're called directly from the browser.
 The manual "Pull new postings" button always works. Separately, a user can
 turn on **Daily discovery** in the Profile view; a Vercel Cron job
 (`vercel.json`, 13:00 UTC) then calls `/api/cron/discover`, which for each
-opted-in user pulls Adzuna and/or Arbeitnow, keeps only postings that score
-30+ against their Profile (max 25 a day), and has Compass/Scout comment on
-the top three in the Case File. It never applies to anything.
+opted-in user pulls from whichever of the five sources they've checked
+(Adzuna, Arbeitnow, RemoteOK, Jobicy, The Muse), keeps only postings that
+score 30+ against their Profile (max 25 a day), and has Compass/Scout
+comment on the top three in the Case File. It never applies to anything.
 
 This needs no Blaze plan — it's a Next.js route, not a Cloud Function —
 but it does need two server-only secrets (see `.env.local.example`):

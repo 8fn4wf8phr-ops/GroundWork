@@ -86,11 +86,14 @@ export type Application = {
 // lib/server/scheduled-discovery.ts). Lives on the Profile document so it
 // needs no new Firestore rules; the cron writes lastRunAt/lastRunSummary
 // back with the Admin SDK. Only the sources listed here are pulled.
-export type ScheduledSourceId = "adzuna" | "arbeitnow"
+export type ScheduledSourceId = "adzuna" | "arbeitnow" | "remoteok" | "jobicy" | "themuse"
 
 export const SCHEDULED_SOURCES: { id: ScheduledSourceId; label: string }[] = [
   { id: "adzuna", label: "Adzuna" },
   { id: "arbeitnow", label: "Arbeitnow" },
+  { id: "remoteok", label: "RemoteOK" },
+  { id: "jobicy", label: "Jobicy" },
+  { id: "themuse", label: "The Muse" },
 ]
 
 export type ScheduledDiscoverySettings = {

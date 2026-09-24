@@ -3,6 +3,9 @@ import Anthropic from "@anthropic-ai/sdk"
 import { NextRequest, NextResponse } from "next/server"
 import { fetchAdzunaJobsForProfile } from "@/lib/discovery/adzuna-map"
 import { fetchArbeitnowJobs } from "@/lib/discovery/arbeitnow"
+import { fetchRemoteOkJobs } from "@/lib/discovery/remoteok"
+import { fetchJobicyJobsForProfile } from "@/lib/discovery/jobicy"
+import { fetchThemuseJobs } from "@/lib/discovery/themuse"
 import { AdminConfigError, getAdminDb } from "@/lib/server/firebase-admin"
 import { callAdzuna } from "@/lib/server/adzuna-api"
 import { createAdminStore } from "@/lib/server/admin-store"
@@ -47,6 +50,9 @@ export async function GET(request: NextRequest) {
         fetchers: {
           adzuna: (profile) => fetchAdzunaJobsForProfile(profile, callAdzuna),
           arbeitnow: () => fetchArbeitnowJobs(),
+          remoteok: () => fetchRemoteOkJobs(),
+          jobicy: (profile) => fetchJobicyJobsForProfile(profile),
+          themuse: (profile) => fetchThemuseJobs(profile),
         },
         reviewer: client ? (jobs, profile) => reviewJobs(client, jobs, profile) : null,
         now: new Date(),

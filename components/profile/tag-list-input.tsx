@@ -17,9 +17,23 @@ export default function TagListInput({
   const [draft, setDraft] = useState("")
 
   const commit = () => {
-    const value = draft.trim()
-    if (value && !values.includes(value)) {
-      onChange([...values, value])
+    // Splitting here (not just on comma keydown) also covers paste: pasting
+    // a whole comma-separated block fills `draft` in one go with no
+    // per-character keydown events, so committing it verbatim would add
+    // one giant tag instead of several short ones (this is exactly how
+    // Resume's skills field ended up with a single 294-char entry that a
+    // downstream Zod schema rejects — see JOURNEY.md).
+    const seen = new Set(values)
+    const parts: string[] = []
+    for (const raw of draft.split(",")) {
+      const p = raw.trim()
+      if (p && !seen.has(p)) {
+        seen.add(p)
+        parts.push(p)
+      }
+    }
+    if (parts.length > 0) {
+      onChange([...values, ...parts])
     }
     setDraft("")
   }

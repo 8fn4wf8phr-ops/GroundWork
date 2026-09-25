@@ -613,10 +613,78 @@ as RemoteOK/Jobicy/The Muse and USAJobs before it.
 All 7 spec-listed discovery sources are now live: Arbeitnow, Adzuna,
 RemoteOK, Jobicy, The Muse, USAJobs, We Work Remotely.
 
+The actual Vercel Cron trigger fired on its own for the first time on
+2026-09-24 (`lastRunAt: 2026-09-24T17:01:25.204Z`, a real unforced run —
+"Added 25 new matches, reviewed the top 3.") — the one thing Sections
+19-20 had only verified via manual `?force=1` calls. One open question:
+it fired at 17:01 UTC, not the 13:00 UTC configured in `vercel.json`, and
+a Vercel docs search didn't turn up a clear reason (only code snippets,
+not the plan-limits page) — worth checking the dashboard's Cron Jobs tab
+if that ~4-hour drift matters.
+
+## 24. Tailoring was broken three ways at once
+
+A user bug report ("Generate tailored materials" failing immediately)
+diagnosed the visible symptom correctly — `resume.skills.0` too long —
+but not quite the mechanism: the Resume page's Skills field has used
+`TagListInput` (the same chip component as Profile's target
+roles/must-haves) since Resume was first built (Section 8), never a
+freeform textarea. Checking the real account's stored data instead of
+guessing found the actual mechanism: `TagListInput`'s `commit()` only
+split on comma/Enter *keydown* events. Pasting a whole
+"Languages: JavaScript, HTML, ... Concepts: ..." blob fills its draft
+state in one `onChange` with no per-character keydown at all, so
+`onBlur` committed the entire 294-character paste as a single tag. Fixed
+in the component itself (`components/profile/tag-list-input.tsx`):
+`commit()` now splits the draft on commas (and dedupes) before
+committing, which fixes this for every field that uses the component,
+not just Resume's Skills. The account's already-corrupted stored value
+was migrated by hand (the four category labels were known from the bug
+report, so a one-off script split on them, then on commas) into 17 clean
+entries.
+
+Fixing that wasn't enough to actually confirm success, though — the bug
+report's own acceptance test ("re-run Generate tailored materials on an
+existing application") surfaced two more real, previously-unknown
+blockers along the way, found only by actually replaying the request
+against real data rather than stopping once the reported symptom was
+gone:
+
+- **`resume.projects[].link` rejected `null`.** `sanitizeForFirestore`
+  (Section 11) stores every blank optional field as `null`, by design,
+  to work around Firestore's "throws on `undefined`" behavior — so a
+  real project with no link comes back from Firestore as `link: null`,
+  which Zod's `.optional()` rejects (it allows `undefined`, not `null`).
+  This is the same class of bug the sanitizer's own comment already
+  flagged as recurring, showing up in a new place (a request schema, not
+  a write path). Fixed by accepting null at the schema boundary and
+  transforming it back to `undefined`
+  (`z.string().max(500).nullish().transform((v) => v ?? undefined)`) so
+  nothing downstream needs to know about Firestore's convention.
+- **`maxTokens: 2000` truncated the real response.** Confirmed live,
+  twice, against the real account's actual resume (17 skills, 4 real
+  projects, real experience) — Quill's structured output (summary +
+  selections + a full cover letter) got cut off mid-JSON-string both
+  times, even though 2000 was already the largest budget of any agent
+  route (the rest run at 200-300, having much less to say). Raised to
+  4000.
+
+Verified end-to-end after all three fixes, against the real account's
+real data, for a real existing application (`1OjtO5WuHRX3BMezQbr4`,
+CVS Health Staff Software Development Engineer): 200 response, a real
+generated summary, real skills/projects pulled from the actual resume
+(including the "Tally" project by name), and a cover letter referencing
+real project details. No test data was created — the verification called
+the generation route directly, which only returns JSON; nothing gets
+persisted until the browser-side save step. This is the clearest example
+yet in this project of why "the reported symptom is gone" and "the
+feature works" aren't the same claim — the acceptance test in the bug
+report itself is what caught the other two.
+
 ## What this leaves for next time
 
-- **Scheduled discovery is verified against real Firestore and real
-  production (Sections 19-20)**, but only via a manual `?force=1` call —
-  the actual Vercel Cron trigger (13:00 UTC daily) has never fired on its
-  own yet.
 - The browser extension (spec-mentioned, not started).
+- Worth a look sometime: whether other agent routes' `.optional()`
+  fields have the same latent null-vs-undefined gap as Section 24's
+  `link` fix — none are known to be broken, but none have been checked
+  against real Firestore data holding `null` in that field either.

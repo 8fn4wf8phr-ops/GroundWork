@@ -43,7 +43,17 @@ const RequestSchema = z.object({
           name: short,
           description: z.string().max(3000),
           skills: z.array(z.string().max(100)).max(50),
-          link: z.string().max(500).optional(),
+          // sanitizeForFirestore (lib/firestore/sanitize.ts) stores every
+          // blank optional field as `null`, not absent — a real project
+          // with no link comes back from Firestore as `link: null`, which
+          // `.optional()` alone rejects. Accept null at the boundary and
+          // normalize it away so nothing downstream needs to know Firestore's
+          // convention.
+          link: z
+            .string()
+            .max(500)
+            .nullish()
+            .transform((v) => v ?? undefined),
         }),
       )
       .max(50),
@@ -103,7 +113,12 @@ export const POST = agentRoute({ name: "Tailoring", schema: RequestSchema }, asy
   const parsed = await parseStructured(client, {
     system: QUILL_SYSTEM,
     prompt: buildPrompt(body.resume, body.profile, body.job),
-    maxTokens: 2000,
+    // 2000 was already the largest budget of any agent route (others are
+    // 200-300) but still truncated mid-JSON for a real resume with several
+    // projects and a full cover letter (confirmed live, twice, against a
+    // real account) — the summary + cover letter + selections add up to
+    // more than that leaves room for.
+    maxTokens: 4000,
     schema: TailorSchema,
   })
   if (!parsed) throw new AgentHttpError(502, "Quill's response couldn't be parsed.")

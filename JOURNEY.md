@@ -839,15 +839,26 @@ bigger, more consequential action than anything else this session has
 done unprompted, and it's the user's call to make, not a bonus-layer
 best-effort action like a cron email.
 
-Verified end-to-end short of that one manual step: Herald's draft route
-against the real account's real resume (real project cited by name, real
-resolved link and portfolio link appended, a real over-eager warning
-correctly flagging "15" from "a 15-minute call" — expected false-positive
-behavior from the same figure-checker Quill uses, not a new bug), a full
-Outreach CRUD round-trip via Admin SDK, and the follow-up-merge logic
-against synthetic data. Not yet verified: the actual browser flow
-(Contacts → Draft with Herald → approve → copy), which needs the rules
-republished first — that's the one thing only the user can do next.
+Verified end-to-end: Herald's draft route against the real account's real
+resume (real project cited by name, real resolved link and portfolio link
+appended, a real over-eager warning correctly flagging "15" from "a
+15-minute call" — expected false-positive behavior from the same
+figure-checker Quill uses, not a new bug), and the follow-up-merge logic
+against synthetic data.
+
+**The rules gap, closed the same day.** User republished `firestore.rules`
+in the Firebase console. Re-verified with the exact same method as the
+403 that first caught it — a real ID token hitting the Firestore REST API
+directly, not Admin (which would have passed regardless and proven
+nothing) — this time running the full CRUD cycle a browser would: create
+(200), read (200), update (200), query by ownerId (200, found it),
+delete (200). One expected wrinkle: reading the doc again after deleting
+it returned 403, not 404 — this is the same null-`resource`-on-a-
+nonexistent-doc quirk this project's own rules comments already call out
+for why profiles/resumes check the path instead of `resource.data`; it
+doesn't affect real usage since the app only ever queries `outreach` by
+ownerId, never gets a specific doc by id directly. Outreach is now fully
+live, not just built.
 
 ## What this leaves for next time
 
@@ -859,6 +870,3 @@ republished first — that's the one thing only the user can do next.
 - Microsoft Graph OAuth for a direct Outlook send from Herald — flagged
   in code/comments as a planned fast-follow, not built (spec explicitly
   scoped v1 to approve → clipboard only).
-- Firestore rules need to be republished in the Firebase console before
-  Outreach works for real browser use — confirmed live as a real,
-  current blocker, not a hypothetical one.

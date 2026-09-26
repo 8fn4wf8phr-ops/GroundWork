@@ -695,6 +695,76 @@ route's own code returning an error. Fixed with
 production — direct proof 60s functions work on this project, not a
 guess about the plan's limits.
 
+## 25. Email notifications via Resend
+
+Four email types, all opt-in via a new `notificationEmail` Profile field
+(separate from the existing `email` field — that one's what recruiters
+see on applications, this one's just where notifications go): a daily
+follow-up reminder, a new-match alert after a discovery pull, a weekly
+digest, and a tailored-materials copy. `lib/email.ts` is the one place
+that calls Resend; `lib/email/templates.ts` holds four pure builders
+(subject + plain text, no HTML) that take plain data and are shared by
+every caller — an interactive route, the cron, and the manual test-send
+route all produce identical output from identical input, and all four
+were checked directly against the real account's real applications/jobs
+before being wired into anything (one genuinely came back empty — no
+follow-up dates set yet — which is the correct, honest output, not a
+bug).
+
+**The cron-count decision:** the ask was a daily reminder cron and a
+separate weekly digest cron. Vercel's cron-job-count limit varies by
+plan, and a docs search came back with only code snippets, no limits
+table — same gap hit in Section 22's cron-timing question. Rather than
+risk a third `vercel.json` entry deploying to something already at its
+cap, the two were merged into one `/api/cron/notifications` route: it
+always sends the daily reminder, and also runs the weekly-digest logic
+in the same invocation on Mondays (`getUTCDay() === 1`), with `?force=1`
+to test that branch on any day. User-visible behavior is identical
+either way — "runs daily" and "runs weekly on top of that" — so this
+cost nothing except a `runWeeklyDigest` boolean, and keeps the project at
+2 total cron jobs instead of 3.
+
+**A query worth double-checking before trusting it:** finding every user
+with a `notificationEmail` set means matching "not absent," and Firestore
+inequality filters have specific, sometimes-surprising rules around
+`null`. Verified live rather than assumed: `where("notificationEmail",
+"!=", null)` on the real profiles collection correctly returned 0 docs
+before any were set, then correctly found a doc after temporarily writing
+a throwaway value to the real account (reverted immediately after).
+
+**New-match reuses, rather than re-invents, matchReasons.** The ask was
+"email me if any score above 70... listing those matches with scores and
+reasoning" — read literally as needing an LLM sentence per match, but
+`matchReasons` (the deterministic list `lib/matching/score.ts` already
+computes for every job, not just the ones Compass narrates) already *is*
+the reasoning, and reusing it directly means the email doesn't depend on
+Compass having run (it's capped at the top 3 per pull, Section on
+`MAX_JOBS_PER_REVIEW`) or cost an extra model call for something plain
+text already covers. Confirmed against the real account: 26 real jobs
+currently score above 70, formatted with real titles, companies, scores,
+and reasons.
+
+**What "test send" means for each type:** follow-up, new-match, and
+weekly-digest each got a real button (Profile page, "Test notification
+emails") that sends real content from the signed-in user's *current*
+data — never fabricated placeholder text; if there's nothing to send
+(confirmed live: no follow-ups due today, on the real account), the
+response says so instead of faking a preview. Tailored materials
+deliberately has no separate test button: it already sends on every real
+"Generate tailored materials" call, so using the feature normally is the
+test.
+
+**Verified without a real send:** no `RESEND_API_KEY` was available this
+session (the user's own Resend signup, not shared) — sendEmail() throws
+a typed `EmailConfigError` when it's unset, so this was checked end to
+end short of the actual Resend API call: real auth gating (401 without a
+token), real content builders against real Firestore data, the
+notification-email Firestore query, and the fail-closed 503 when the key
+is missing (confirmed on all three new routes: the cron, new-matches,
+and test-send) — all live against the real account, just stopping one
+hop short of actually dispatching mail. Once `RESEND_API_KEY` is set on
+Vercel, the test buttons are the way to confirm the last hop.
+
 ## What this leaves for next time
 
 - The browser extension (spec-mentioned, not started).
@@ -702,3 +772,5 @@ guess about the plan's limits.
   fields have the same latent null-vs-undefined gap as Section 24's
   `link` fix — none are known to be broken, but none have been checked
   against real Firestore data holding `null` in that field either.
+- The actual Resend send path (past the config check) is unverified —
+  needs `RESEND_API_KEY` set, which only the user can do.

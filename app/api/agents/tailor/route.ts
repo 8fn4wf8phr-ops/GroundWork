@@ -1,6 +1,8 @@
 import { z } from "zod"
 import { AgentHttpError, agentRoute, parseStructured } from "@/lib/server/agent-route"
 import { findUnsupportedFigures, resolveSelection } from "@/lib/agents/tailor-resolve"
+import { sendEmail } from "@/lib/email"
+import { buildTailoredMaterialsEmail } from "@/lib/email/templates"
 
 // Quill generates a full cover letter plus summary/selections in one
 // structured-output call — confirmed live to take 25-40s for a real
@@ -66,7 +68,11 @@ const RequestSchema = z.object({
       )
       .max(50),
   }),
-  profile: z.object({ targetRoles: z.array(z.string().max(200)).max(20), mustHaves: z.array(z.string().max(200)).max(50) }),
+  profile: z.object({
+    targetRoles: z.array(z.string().max(200)).max(20),
+    mustHaves: z.array(z.string().max(200)).max(50),
+    notificationEmail: z.string().email().max(320).optional(),
+  }),
   job: z.object({ title: short, company: short, location: short, description: z.string().max(20000) }),
 })
 type RequestBody = z.infer<typeof RequestSchema>
@@ -152,6 +158,21 @@ export const POST = agentRoute({ name: "Tailoring", schema: RequestSchema }, asy
     body.job.description,
   ].join("\n")
   const warnings = findUnsupportedFigures(`${parsed.summary}\n${parsed.coverLetter}`, sourceText)
+
+  // Best-effort bonus layer, same reasoning as every other agent
+  // side-effect in this codebase (Ledger's case-file logging, the
+  // scheduled-discovery review) — awaited so it finishes before the
+  // function returns (Vercel serverless functions don't keep running
+  // after the response is sent), but a failure here never blocks handing
+  // the real, already-generated materials back to the user.
+  if (body.profile.notificationEmail) {
+    try {
+      const email = buildTailoredMaterialsEmail(body.job, { summary: parsed.summary, coverLetter: parsed.coverLetter, ...resolved })
+      await sendEmail({ to: body.profile.notificationEmail, subject: email.subject, text: email.text })
+    } catch (err) {
+      console.error("[agents] Tailoring: confirmation email failed:", err)
+    }
+  }
 
   return {
     summary: parsed.summary,

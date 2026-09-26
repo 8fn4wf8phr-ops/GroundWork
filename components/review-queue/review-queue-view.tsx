@@ -16,6 +16,7 @@ import { saveDiscoveredJobs, dismissJob } from "@/lib/firestore/jobs"
 import { createApplicationFromJob } from "@/lib/firestore/applications"
 import { createCaseFileEntries } from "@/lib/firestore/case-file"
 import { reviewTopNewJobs } from "@/lib/agents/review-jobs"
+import { postAgent } from "@/lib/agents/client"
 import type { DiscoveredJob } from "@/lib/discovery/types"
 import type { Job, Profile } from "@/lib/types"
 
@@ -154,6 +155,28 @@ export default function ReviewQueueView() {
           // Agent commentary is a bonus layer on top of real, already-saved
           // Jobs — a failure here shouldn't block the pull itself or hide
           // that the postings landed successfully.
+        }
+        if (profile.notificationEmail) {
+          try {
+            await postAgent(
+              "/api/notifications/new-matches",
+              {
+                notificationEmail: profile.notificationEmail,
+                jobs: savedJobs.map((j) => ({
+                  title: j.title,
+                  company: j.company,
+                  location: j.location,
+                  matchScore: j.matchScore ?? 0,
+                  matchReasons: j.matchReasons ?? [],
+                  postingUrl: j.postingUrl,
+                })),
+              },
+              "New match notification",
+            )
+          } catch {
+            // Same bonus-layer reasoning as the case-file entries above —
+            // an email failure never hides that the pull itself succeeded.
+          }
         }
       }
     } catch (err) {

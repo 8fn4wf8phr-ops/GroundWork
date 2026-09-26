@@ -81,7 +81,10 @@ export async function requireUser(request: NextRequest, bucket: string): Promise
   return uid
 }
 
-async function readValidatedBody<S extends z.ZodType>(request: NextRequest, schema: S): Promise<z.infer<S>> {
+// Exported for routes that need signed-in-user + validated-JSON-body
+// handling but aren't LLM-backed (so agentRoute's Anthropic-client
+// requirement doesn't apply) — the notification routes, e.g.
+export async function readValidatedBody<S extends z.ZodType>(request: NextRequest, schema: S): Promise<z.infer<S>> {
   const declaredLength = Number(request.headers.get("content-length") ?? 0)
   if (declaredLength > MAX_BODY_BYTES) throw new AgentHttpError(413, "Request body too large.")
   const text = await request.text()

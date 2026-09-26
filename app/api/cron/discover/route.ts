@@ -1,4 +1,3 @@
-import { createHash, timingSafeEqual } from "node:crypto"
 import Anthropic from "@anthropic-ai/sdk"
 import { NextRequest, NextResponse } from "next/server"
 import { fetchAdzunaJobsForProfile } from "@/lib/discovery/adzuna-map"
@@ -15,19 +14,15 @@ import { callAdzuna } from "@/lib/server/adzuna-api"
 import { createAdminStore } from "@/lib/server/admin-store"
 import { reviewJobs } from "@/lib/server/review-jobs"
 import { runScheduledDiscovery } from "@/lib/server/scheduled-discovery"
+import { sendEmail } from "@/lib/email"
+import { buildNewMatchEmail } from "@/lib/email/templates"
+import { secretMatches } from "@/lib/server/cron-auth"
 
 // Vercel Cron target (see vercel.json). Vercel calls it with
 // `Authorization: Bearer $CRON_SECRET`; anything else is refused, and an
 // unset CRON_SECRET refuses everything — this route must never be open,
 // because it uses Admin access and spends the Anthropic key.
 export const maxDuration = 60
-
-function secretMatches(header: string, secret: string): boolean {
-  // Hash both sides so the comparison is constant-time and length-safe.
-  const a = createHash("sha256").update(header).digest()
-  const b = createHash("sha256").update(`Bearer ${secret}`).digest()
-  return timingSafeEqual(a, b)
-}
 
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET
@@ -46,6 +41,7 @@ export async function GET(request: NextRequest) {
 
   const apiKey = process.env.ANTHROPIC_API_KEY
   const client = apiKey ? new Anthropic({ apiKey }) : null
+  const emailingEnabled = Boolean(process.env.RESEND_API_KEY)
 
   try {
     const result = await runScheduledDiscovery(
@@ -61,6 +57,21 @@ export async function GET(request: NextRequest) {
           weworkremotely: () => fetchWeWorkRemotelyJobs(callWwr),
         },
         reviewer: client ? (jobs, profile) => reviewJobs(client, jobs, profile) : null,
+        emailer: emailingEnabled
+          ? async (to, jobs) => {
+              const email = buildNewMatchEmail(
+                jobs.map((j) => ({
+                  title: j.title,
+                  company: j.company,
+                  location: j.location,
+                  matchScore: j.matchScore ?? 0,
+                  matchReasons: j.matchReasons ?? [],
+                  postingUrl: j.postingUrl,
+                })),
+              )
+              if (email) await sendEmail({ to, subject: email.subject, text: email.text })
+            }
+          : null,
         now: new Date(),
       },
       // ?force=1 skips the once-per-20h guard, for manual testing only.

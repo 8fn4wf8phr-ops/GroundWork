@@ -35,6 +35,12 @@ export interface DiscoveryStore {
 
 export type Fetchers = Record<ScheduledSourceId, (profile: Profile) => Promise<DiscoveredJob[]>>
 export type Reviewer = (jobs: JobInput[], profile: ProfileInput) => Promise<CaseFileEntryDraft[]>
+// Sends the new-match email for one user's newly-saved Jobs; the
+// implementation (app/api/cron/discover/route.ts) decides what "above 70"
+// and the copy look like (lib/email/templates.ts) — this layer only knows
+// whether to call it. Null when RESEND_API_KEY isn't configured, same
+// nullable-when-unconfigured pattern as Reviewer.
+export type Emailer = (to: string, jobs: Job[]) => Promise<void>
 
 export type UserResult = {
   user: string
@@ -125,6 +131,16 @@ async function runForUser(
   const saved = fresh.length > 0 ? await deps.store.saveJobs(uid, fresh) : []
   result.saved = saved.length
 
+  // Another bonus layer on real, already-saved Jobs — a failure never
+  // undoes the save or blocks the agent review below.
+  if (saved.length > 0 && deps.emailer && profile.notificationEmail) {
+    try {
+      await deps.emailer(profile.notificationEmail, saved)
+    } catch (err) {
+      result.notes.push(`new-match email failed: ${errorText(err)}`)
+    }
+  }
+
   // Agent commentary is a bonus layer on real, already-saved Jobs: a
   // failure here never undoes the save. It also needs target roles — with
   // none, every score is meaningless and there's nothing for Compass to say.
@@ -165,6 +181,9 @@ export type DiscoveryDeps = {
   // null when no Anthropic key is configured: jobs are still saved, just
   // without commentary.
   reviewer: Reviewer | null
+  // null when no RESEND_API_KEY is configured: jobs are still saved, just
+  // without a notification.
+  emailer: Emailer | null
   now: Date
 }
 

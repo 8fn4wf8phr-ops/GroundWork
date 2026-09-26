@@ -12,6 +12,7 @@ import { checkInWithSage } from "@/lib/agents/sage"
 import TagListInput from "@/components/profile/tag-list-input"
 import DeleteAccountSection from "@/components/profile/delete-account-section"
 import ScheduledDiscoverySection from "@/components/profile/scheduled-discovery-section"
+import NotificationTestPanel from "@/components/profile/notification-test-panel"
 
 export default function ProfileView() {
   const { user } = useAuth()
@@ -22,6 +23,7 @@ export default function ProfileView() {
 
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
+  const [notificationEmail, setNotificationEmail] = useState("")
   const [phone, setPhone] = useState("")
   const [targetRoles, setTargetRoles] = useState<string[]>([])
   const [locations, setLocations] = useState<string[]>([])
@@ -41,6 +43,7 @@ export default function ProfileView() {
     if (profile) {
       setName(profile.name)
       setEmail(profile.email)
+      setNotificationEmail(profile.notificationEmail ?? "")
       setPhone(profile.phone ?? "")
       setTargetRoles(profile.targetRoles)
       setLocations(profile.locations)
@@ -61,6 +64,7 @@ export default function ProfileView() {
       await saveProfile(user.uid, {
         name,
         email,
+        notificationEmail: notificationEmail || undefined,
         phone: phone || undefined,
         targetRoles,
         locations,
@@ -141,6 +145,18 @@ export default function ProfileView() {
             />
           </label>
         </div>
+
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span style={{ color: colors.muted }}>Notification email (optional)</span>
+          <input
+            type="email"
+            value={notificationEmail}
+            onChange={(e) => setNotificationEmail(e.target.value)}
+            placeholder="Where follow-up reminders, new matches, and the weekly digest go — leave blank for none"
+            className="rounded-lg border bg-transparent px-3 py-2 text-sm outline-none"
+            style={{ borderColor: colors.border, color: colors.text }}
+          />
+        </label>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5 text-sm">
@@ -230,6 +246,8 @@ export default function ProfileView() {
       </div>
 
       <ScheduledDiscoverySection />
+
+      <NotificationTestPanel notificationEmail={profile?.notificationEmail} />
 
       <DeleteAccountSection />
     </div>

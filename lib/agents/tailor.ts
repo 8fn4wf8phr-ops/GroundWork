@@ -28,7 +28,7 @@ export async function tailorForJob(
           link: p.link,
         })),
       },
-      profile: { targetRoles: profile.targetRoles, mustHaves: profile.mustHaves },
+      profile: { targetRoles: profile.targetRoles, mustHaves: profile.mustHaves, notificationEmail: profile.notificationEmail },
       job: {
         title: clip(job.title, 300),
         company: clip(job.company, 300),

@@ -27,7 +27,8 @@ below.
 **Also complete:** the real six-agent system (Compass, Scout, Sage,
 Quill, Ledger, Lens — see JOURNEY.md §15-17), structured Resume storage,
 resume/cover-letter tailoring, follow-up reminders, referral/channel
-Analytics, and portfolio project sync.
+Analytics, portfolio project sync, and email notifications (see
+[Email notifications](#email-notifications-opt-in) below).
 
 **Not started:** the browser extension.
 
@@ -126,6 +127,43 @@ To try it without waiting for the cron: with both set,
 `curl -H "Authorization: Bearer $CRON_SECRET" "https://<your-app>/api/cron/discover?force=1"`
 (`force=1` skips the once-per-20-hours guard).
 
+## Email notifications (opt-in)
+
+Four kinds of email, all opt-in via **Notification email** on the Profile
+page — leave it blank and nothing gets sent:
+
+- **Follow-up reminder** — daily (Vercel Cron, 8:00 UTC), lists
+  applications with a follow-up date of today.
+- **New match** — sent right after a discovery pull (manual or scheduled)
+  if any newly-saved posting scored above 70/100.
+- **Weekly digest** — Monday mornings (same daily cron; see below),
+  status breakdown, response/interview/offer rates, upcoming follow-ups,
+  and whatever channel/source gap Lens's own pattern detection finds.
+- **Tailored materials copy** — sent every time "Generate tailored
+  materials" succeeds, with the real generated summary/skills/experience/
+  projects/cover letter.
+
+Emails are sent via [Resend](https://resend.com) — `lib/email.ts` is the
+one place that calls their API. Needs `RESEND_API_KEY` (server-only; see
+`.env.local.example`); `EMAIL_FROM` is optional and defaults to Resend's
+own shared sending domain, which works before you've verified a custom
+one. With no key configured, sends fail closed (503) rather than
+silently no-oping.
+
+The follow-up reminder and weekly digest share one cron route
+(`/api/cron/notifications`, `vercel.json`) rather than two separate
+entries — it always sends the daily reminder, and also runs the weekly
+digest on Mondays (or with `?force=1`, for testing any day). This keeps
+the project at 2 total Vercel Cron jobs instead of 3, alongside
+`/api/cron/discover`.
+
+To check formatting without waiting on a cron or a lucky discovery pull:
+the Profile page has a **Test notification emails** panel with a button
+per type (skipping tailored materials, since every real generation
+already sends one). Each button sends real content from your current
+data — if there's nothing to send (no follow-ups due, nothing scoring
+above 70), it says so rather than sending a fake preview.
+
 ## Project structure
 
 ```
@@ -133,6 +171,8 @@ app/
   api/discovery/*/route.ts        — server-side proxies (Adzuna, USAJobs, We Work Remotely)
   api/agents/*                    — agent routes (require a signed-in user)
   api/cron/discover/route.ts      — daily discovery (Vercel Cron only)
+  api/cron/notifications/route.ts — follow-up reminder + weekly digest (Vercel Cron only)
+  api/notifications/*             — new-match + test-send email routes (signed-in user)
   layout.tsx, page.tsx            — wraps the app in AuthProvider
 components/
   applications-dashboard.tsx      — the shell: nav rail, header, view switch
@@ -147,6 +187,9 @@ lib/
   types.ts                        — the full data model (spec §4)
   discovery/                      — one module per job source
   matching/score.ts               — the match-scoring algorithm
+  email.ts                        — the one place that calls Resend
+  email/templates.ts              — pure builders for all 4 email types
+  notifications/follow-ups.ts     — shared "which applications are due" logic
   firestore/                      — all Firestore reads/writes, by collection
     sanitize.ts                   — shared fix for a recurring Firestore
                                      bug (see JOURNEY.md)

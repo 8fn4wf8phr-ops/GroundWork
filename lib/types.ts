@@ -116,6 +116,13 @@ export type Profile = {
   mustHaves: string[]
   dealBreakers: string[]
   scheduledDiscovery?: ScheduledDiscoverySettings
+  // Where email notifications go (follow-up reminders, new matches, the
+  // weekly digest, tailored-materials copies) — separate from `email`
+  // above (the contact address used on applications) so notifications can
+  // go somewhere else entirely without touching what recruiters see.
+  // Unset means no notification emails are sent, same skip-if-unset
+  // pattern as scheduledDiscovery.
+  notificationEmail?: string
   updatedAt: string
 }
 

@@ -60,5 +60,12 @@ service cloud.firestore {
       allow read, update, delete: if isOwner(resource.data.ownerId);
       allow create: if isOwnerOnCreate();
     }
+
+    // Same random-id + query-by-ownerId pattern as jobs/applications/
+    // contacts/tailoredMaterials above (Herald outreach drafts).
+    match /outreach/{outreachId} {
+      allow read, update, delete: if isOwner(resource.data.ownerId);
+      allow create: if isOwnerOnCreate();
+    }
   }
 }

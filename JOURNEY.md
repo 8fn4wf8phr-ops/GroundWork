@@ -774,6 +774,81 @@ nothing to send with no due applications, then sent once given one).
 User confirmed the emails actually arrived. All 4 types are now real,
 not just built — the one gap from the first pass is closed.
 
+## 26. Herald (outreach drafting) + extending Ledger
+
+A seventh agent, from a full written spec: cold-outreach email drafting,
+distinct from Quill's job — Herald opens a door, Quill tailors materials
+to a listing already in hand. Given the spec explicitly said "give Herald
+its own personality... distinct from Quill," it's worth noting Quill
+never posts to the case file at all (checked before writing anything —
+`tailor-materials-modal.tsx` has no `createCaseFileEntries` call), so the
+real distinction ended up being that Herald has a case-file voice where
+Quill conspicuously has none, on top of the system-prompt tone itself
+(warm/direct/short vs. Quill's perfectionist/low-cliché-tolerance).
+
+**Same bug as Section 24, on the first live call.** `maxTokens: 1000` for
+Herald's structured output (subject + a few sentences + one case-file
+note — much smaller than Quill's full materials) still truncated
+mid-JSON on the very first real request. Confirms the lesson from
+Section 24 generalizes: structured-output overhead eats more of the
+budget than the visible text alone suggests, regardless of how short the
+target output is. Raised to 2000 and it worked first try after.
+
+**Real links are appended, not generated.** Herald's system prompt tells
+the model to reference a project by name only, never write a URL itself;
+the route resolves `selectedProjectIds` against the real Resume server-
+side (same discipline as `tailor-resolve.ts`) and appends the actual
+`link`/`portfolioUrl` after the model's text, deterministically. A model
+asked to reproduce a real URL verbatim is exactly the kind of thing that
+can quietly drift wrong — this removes that risk entirely rather than
+trusting it.
+
+**Ledger extended, not duplicated.** `app/api/agents/ledger-log` and
+`lib/agents/logStatusChange` were already generic (`{company, title,
+oldStatus, newStatus}`, no Application-specific assumption in the schema)
+— zero backend changes needed. Outreach status changes just call the same
+function with `title: "Outreach to " + contactName`. Confirmed by reading
+the route before assuming a change was needed.
+
+**Follow-up reminders reuse the existing system, verified as a real
+merge, not just a type-check.** Outreach's shape doesn't nest a `job` the
+way Applications do, so `lib/notifications/follow-ups.ts` got two small
+parallel functions (`dueTodayOutreach`/`upcomingOutreach`) rather than
+forcing Outreach through the Application-shaped one — lower risk than
+reshaping code that was already live-verified for real sends last
+session. Checked with synthetic mixed data (one Application, one
+Outreach due today, one Outreach due later): both the daily-reminder and
+weekly-digest builders correctly merge and sort applications and outreach
+together into one list, not two.
+
+**A real, confirmed gap: Firestore rules aren't auto-deployed.** New
+collection (`outreach`) needs a new rule block, but this repo's
+`firestore.rules` file is only ever manually pasted into the Firebase
+console (true since the project's first setup — see the Getting Started
+section). Rather than assume that's still the deploy story, checked it
+live: minted a real ID token for the real account and hit the Firestore
+REST API directly (the same path the client SDK takes, unlike Admin
+access which bypasses rules entirely) — a real `403 PERMISSION_DENIED`
+on `outreach`, confirming the rule change in the repo does nothing until
+someone manually republishes it in the console. Documented prominently in
+the README's new Outreach section so this doesn't get missed silently.
+Deliberately did NOT attempt to publish the rules programmatically (the
+Firebase Rules API can do this with the same service-account credentials
+already in hand) — changing the app's whole security boundary is a
+bigger, more consequential action than anything else this session has
+done unprompted, and it's the user's call to make, not a bonus-layer
+best-effort action like a cron email.
+
+Verified end-to-end short of that one manual step: Herald's draft route
+against the real account's real resume (real project cited by name, real
+resolved link and portfolio link appended, a real over-eager warning
+correctly flagging "15" from "a 15-minute call" — expected false-positive
+behavior from the same figure-checker Quill uses, not a new bug), a full
+Outreach CRUD round-trip via Admin SDK, and the follow-up-merge logic
+against synthetic data. Not yet verified: the actual browser flow
+(Contacts → Draft with Herald → approve → copy), which needs the rules
+republished first — that's the one thing only the user can do next.
+
 ## What this leaves for next time
 
 - The browser extension (spec-mentioned, not started).
@@ -781,3 +856,9 @@ not just built — the one gap from the first pass is closed.
   fields have the same latent null-vs-undefined gap as Section 24's
   `link` fix — none are known to be broken, but none have been checked
   against real Firestore data holding `null` in that field either.
+- Microsoft Graph OAuth for a direct Outlook send from Herald — flagged
+  in code/comments as a planned fast-follow, not built (spec explicitly
+  scoped v1 to approve → clipboard only).
+- Firestore rules need to be republished in the Firebase console before
+  Outreach works for real browser use — confirmed live as a real,
+  current blocker, not a hypothetical one.

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { secretMatches } from "@/lib/server/cron-auth"
 import { AdminConfigError, getAdminDb } from "@/lib/server/firebase-admin"
-import { getApplicationsWithJobs, listUsersWithNotificationEmail } from "@/lib/server/notification-data"
-import { dueToday, upcomingWithinDays } from "@/lib/notifications/follow-ups"
+import { getApplicationsWithJobs, getOutreach, listUsersWithNotificationEmail } from "@/lib/server/notification-data"
+import { dueToday, dueTodayOutreach, upcomingOutreach, upcomingWithinDays } from "@/lib/notifications/follow-ups"
 import { computeOverallStats, computeRatesByChannel, computeRatesBySource } from "@/lib/analytics"
 import { detectNotablePattern } from "@/lib/agents/pattern-signals"
 import { buildFollowUpReminderEmail, buildWeeklyDigestEmail } from "@/lib/email/templates"
@@ -54,19 +54,29 @@ export async function GET(request: NextRequest) {
   for (const user of users) {
     const entry = { user: user.uid.slice(0, 6), followUpSent: false, digestSent: false }
     try {
-      const applications = await getApplicationsWithJobs(db, user.uid)
+      const [applications, outreach] = await Promise.all([getApplicationsWithJobs(db, user.uid), getOutreach(db, user.uid)])
 
-      const followUpEmail = buildFollowUpReminderEmail(dueToday(applications, today))
+      // Outreach follow-ups land in the same two emails Applications
+      // already use, not a third notification type — see
+      // lib/notifications/follow-ups.ts for why these are separate
+      // functions rather than forcing Outreach through the Application
+      // shape.
+      const dueApplications = dueToday(applications, today)
+      const dueOutreach = dueTodayOutreach(outreach, today)
+      const followUpEmail = buildFollowUpReminderEmail([...dueApplications, ...dueOutreach])
       if (followUpEmail) {
         await sendEmail({ to: user.notificationEmail, subject: followUpEmail.subject, text: followUpEmail.text })
         entry.followUpSent = true
       }
 
       if (runWeeklyDigest) {
+        const upcoming = [...upcomingWithinDays(applications, today, 7), ...upcomingOutreach(outreach, today, 7)].sort(
+          (a, b) => a.followUpDate.localeCompare(b.followUpDate),
+        )
         const digestEmail = buildWeeklyDigestEmail({
           statusCounts: statusCounts(applications),
           overall: computeOverallStats(applications),
-          upcomingFollowUps: upcomingWithinDays(applications, today, 7),
+          upcomingFollowUps: upcoming,
           pattern: detectNotablePattern(computeRatesByChannel(applications), computeRatesBySource(applications)),
         })
         await sendEmail({ to: user.notificationEmail, subject: digestEmail.subject, text: digestEmail.text })

@@ -4,9 +4,10 @@ import { useState } from "react"
 import { colors } from "@/lib/theme"
 import { useApplications } from "@/lib/hooks/use-applications"
 import { useReviewQueue } from "@/lib/hooks/use-review-queue"
+import { useOutreach } from "@/lib/hooks/use-outreach"
 import { computeOverallStats, computeRatesByChannel, computeRatesBySource } from "@/lib/analytics"
 import { detectNotablePattern } from "@/lib/agents/pattern-signals"
-import { dueToday, upcomingWithinDays } from "@/lib/notifications/follow-ups"
+import { dueToday, dueTodayOutreach, upcomingOutreach, upcomingWithinDays } from "@/lib/notifications/follow-ups"
 import { postAgent } from "@/lib/agents/client"
 
 // Manual test-send for the three email types that don't naturally fire on
@@ -21,6 +22,7 @@ const TODAY = () => new Date().toISOString().slice(0, 10)
 export default function NotificationTestPanel({ notificationEmail }: { notificationEmail?: string }) {
   const { applications } = useApplications()
   const { pending } = useReviewQueue()
+  const { outreach } = useOutreach()
   const [sending, setSending] = useState<TestType | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
@@ -34,7 +36,11 @@ export default function NotificationTestPanel({ notificationEmail }: { notificat
     try {
       let body: Record<string, unknown>
       if (type === "follow-up") {
-        body = { type, notificationEmail, applications: dueToday(applications, TODAY()) }
+        body = {
+          type,
+          notificationEmail,
+          applications: [...dueToday(applications, TODAY()), ...dueTodayOutreach(outreach, TODAY())],
+        }
       } else if (type === "new-match") {
         body = {
           type,
@@ -63,7 +69,9 @@ export default function NotificationTestPanel({ notificationEmail }: { notificat
           notificationEmail,
           statusCounts,
           overall,
-          upcomingFollowUps: upcomingWithinDays(applications, TODAY(), 7),
+          upcomingFollowUps: [...upcomingWithinDays(applications, TODAY(), 7), ...upcomingOutreach(outreach, TODAY(), 7)].sort(
+            (a, b) => a.followUpDate.localeCompare(b.followUpDate),
+          ),
           pattern: detectNotablePattern(byChannel, bySource),
         }
       }

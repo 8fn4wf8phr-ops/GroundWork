@@ -123,6 +123,12 @@ export type Profile = {
   // Unset means no notification emails are sent, same skip-if-unset
   // pattern as scheduledDiscovery.
   notificationEmail?: string
+  // Soft daily cap on approved outreach sends (Herald/Ledger — see
+  // lib/firestore/outreach.ts), to keep outreach looking personal rather
+  // than automated. "Soft": approving past it warns, never blocks.
+  // Undefined means the default of 10, same optional-with-fallback
+  // pattern as everything else here.
+  outreachDailyCap?: number
   updatedAt: string
 }
 
@@ -199,6 +205,49 @@ export type Contact = {
   applicationIds: string[]
 }
 
+// Cold outreach, tracked alongside Applications but not merged into them —
+// a contact can exist before or without a formal Application (Herald spec:
+// "Ledger, extend — no new agent"). Surfaced on the Contacts page, not a
+// separate view.
+export type OutreachStatus = "Drafted" | "Sent" | "Responded" | "Follow-up due" | "No response"
+
+export const OUTREACH_STATUSES: OutreachStatus[] = ["Drafted", "Sent", "Responded", "Follow-up due", "No response"]
+
+export type Outreach = {
+  id: string
+  ownerId: string
+  contactId: string
+  // Set only if the user picked one of the contact's linked Applications
+  // when drafting — Herald then uses that Job's real title/description as
+  // context, same as Quill would. Outreach doesn't require one to exist.
+  applicationId?: string
+  company: string
+  contactName: string
+  contactEmail?: string
+  // Free-text role/job context Herald was given (may be copied from a
+  // linked Application's Job, or typed manually) — kept for reference,
+  // never fetched from a URL (spec guardrail: contact/context info is
+  // supplied manually, nothing here scrapes).
+  roleContext?: string
+  postingUrl?: string
+  subject: string
+  body: string
+  // Real project names Herald's draft referenced, resolved server-side
+  // against the actual Resume (same "select by reference, never invent"
+  // discipline as Quill) — shown in the UI so it's clear what's real.
+  projectsReferenced: string[]
+  warnings?: string[]
+  status: OutreachStatus
+  followUpDate?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+  // Set when status first moves to "Sent" — the daily-cap check counts
+  // sends by this date, not by current status (which can move on to
+  // Responded/etc. later).
+  sentAt?: string
+}
+
 // A joined view for the dashboard — an Application with its Job data
 // attached, since the board renders on company/title, not raw IDs.
 export type ApplicationWithJob = Application & { job: Job | undefined }
@@ -210,7 +259,7 @@ export type ApplicationWithJob = Application & { job: Job | undefined }
 // replace it. When two agents can't reconcile, the exchange escalates:
 // needsYourCall is set, and the user's resolution is recorded rather than
 // either agent unilaterally winning.
-export type AgentName = "Sage" | "Scout" | "Compass" | "Quill" | "Ledger" | "Lens"
+export type AgentName = "Sage" | "Scout" | "Compass" | "Quill" | "Ledger" | "Lens" | "Herald"
 
 export type CaseFileEntry = {
   id: string
@@ -220,6 +269,7 @@ export type CaseFileEntry = {
   createdAt: string
   jobId?: string
   applicationId?: string
+  outreachId?: string
   // Groups entries belonging to one exchange when they aren't naturally
   // tied together by jobId (e.g. Lens/Ledger's channel/source digest,
   // which isn't about any single Job) — set to the same value across every

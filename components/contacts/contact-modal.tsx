@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react"
 import { colors } from "@/lib/theme"
 import { useAuth } from "@/lib/auth-context"
 import { createContact, deleteContact, updateContact } from "@/lib/firestore/contacts"
+import OutreachPanel from "@/components/contacts/outreach-panel"
 import type { Contact } from "@/lib/types"
 
 export default function ContactModal({
@@ -166,6 +167,8 @@ export default function ContactModal({
             </button>
           </div>
         </form>
+
+        {contact && <OutreachPanel contact={contact} />}
       </div>
     </div>
   )

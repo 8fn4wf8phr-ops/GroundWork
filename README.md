@@ -24,11 +24,13 @@ We Work Remotely). Pulling is a manual "Pull new postings" click, or
 opt-in daily via Vercel Cron — see [Scheduling](#scheduling-daily-opt-in)
 below.
 
-**Also complete:** the real six-agent system (Compass, Scout, Sage,
-Quill, Ledger, Lens — see JOURNEY.md §15-17), structured Resume storage,
-resume/cover-letter tailoring, follow-up reminders, referral/channel
-Analytics, portfolio project sync, and email notifications (see
-[Email notifications](#email-notifications-opt-in) below).
+**Also complete:** the real seven-agent system (Compass, Scout, Sage,
+Quill, Ledger, Lens, Herald — see JOURNEY.md §15-17, §26), structured
+Resume storage, resume/cover-letter tailoring, cold-outreach drafting
+(see [Outreach](#outreach-herald--ledger) below), follow-up reminders,
+referral/channel Analytics, portfolio project sync, and email
+notifications (see [Email notifications](#email-notifications-opt-in)
+below).
 
 **Not started:** the browser extension.
 
@@ -164,6 +166,43 @@ already sends one). Each button sends real content from your current
 data — if there's nothing to send (no follow-ups due, nothing scoring
 above 70), it says so rather than sending a fake preview.
 
+## Outreach (Herald + Ledger)
+
+Cold outreach to a company, distinct from tailoring materials to a
+listing already in hand: **Herald** drafts a short, warm, direct email
+using your Resume's summary, the 1-2 projects most relevant to the
+company/role (selected the same way Quill selects projects for tailored
+materials — resolved server-side against your real Resume, never
+invented), and your portfolio/project links. Herald never sends anything.
+A draft lands in a review queue on the **Contacts** page (open a contact,
+"Draft with Herald") where you can edit the subject/body, then **Approve
+& copy** — which copies the body to your clipboard and marks it Sent, for
+you to paste into Outlook yourself. A direct Outlook send via Microsoft
+Graph OAuth is a planned fast-follow, not built in v1.
+
+**Ledger is extended, not duplicated** — the same agent and route that
+logs Application status changes also logs Outreach status changes
+(Drafted → Sent → Responded → Follow-up due → No response), in the same
+case file. Outreach follow-up dates flow into the exact same daily
+reminder and weekly digest emails Applications already use (see
+[Email notifications](#email-notifications-opt-in) above), not a
+separate notification type.
+
+A soft daily cap (**Outreach daily cap** on the Profile page, default 10)
+warns — but never blocks — when approving would exceed it, to keep
+outreach looking personal rather than automated. There's no bulk drafting
+or sending (one contact at a time) and no scraping of company sites or
+contact lists — company/contact info and any job context are typed in by
+you; a "posting URL" field is kept only as a reference link and is never
+fetched.
+
+**New Firestore collection:** `outreach`, same ownerId-scoped rules
+pattern as `applications`/`contacts`. If you added this feature to an
+existing Firebase project, you need to **republish `firestore.rules`**
+(Firestore console → Rules tab) — Firestore defaults to locked, and this
+file isn't deployed automatically (confirmed live: the client SDK gets a
+real `PERMISSION_DENIED` on `outreach` until you do).
+
 ## Project structure
 
 ```
@@ -178,7 +217,7 @@ components/
   applications-dashboard.tsx      — the shell: nav rail, header, view switch
   applications/                   — add/edit application modals
   auth/                           — sign-in screen, auth gate
-  contacts/                       — contacts view + modal
+  contacts/                       — contacts view + modal + outreach panel/detail
   profile/                        — profile form + tag input
   review-queue/                   — discovery review queue
 lib/
@@ -189,7 +228,8 @@ lib/
   matching/score.ts               — the match-scoring algorithm
   email.ts                        — the one place that calls Resend
   email/templates.ts              — pure builders for all 4 email types
-  notifications/follow-ups.ts     — shared "which applications are due" logic
+  notifications/follow-ups.ts     — shared "which applications/outreach are due" logic
+  agents/herald.ts                — Herald's client wrapper
   firestore/                      — all Firestore reads/writes, by collection
     sanitize.ts                   — shared fix for a recurring Firestore
                                      bug (see JOURNEY.md)

@@ -1,5 +1,5 @@
 import type { Firestore } from "firebase-admin/firestore"
-import type { Application, ApplicationWithJob, Job } from "@/lib/types"
+import type { Application, ApplicationWithJob, Job, Outreach } from "@/lib/types"
 
 // Admin-SDK reads for the notifications cron (app/api/cron/notifications).
 // Admin access bypasses Firestore security rules, so every query here is
@@ -27,4 +27,9 @@ export async function getApplicationsWithJobs(db: Firestore, uid: string): Promi
     const app = { id: d.id, ...d.data() } as Application
     return { ...app, job: jobsById.get(app.jobId) }
   })
+}
+
+export async function getOutreach(db: Firestore, uid: string): Promise<Outreach[]> {
+  const snap = await db.collection("outreach").where("ownerId", "==", uid).get()
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Outreach)
 }

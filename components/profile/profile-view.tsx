@@ -28,6 +28,7 @@ export default function ProfileView() {
   const [targetRoles, setTargetRoles] = useState<string[]>([])
   const [locations, setLocations] = useState<string[]>([])
   const [salaryFloor, setSalaryFloor] = useState("")
+  const [outreachDailyCap, setOutreachDailyCap] = useState("")
   const [mustHaves, setMustHaves] = useState<string[]>([])
   const [dealBreakers, setDealBreakers] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
@@ -48,6 +49,7 @@ export default function ProfileView() {
       setTargetRoles(profile.targetRoles)
       setLocations(profile.locations)
       setSalaryFloor(profile.salaryFloor != null ? String(profile.salaryFloor) : "")
+      setOutreachDailyCap(profile.outreachDailyCap != null ? String(profile.outreachDailyCap) : "")
       setMustHaves(profile.mustHaves)
       setDealBreakers(profile.dealBreakers)
     } else if (user?.email) {
@@ -69,6 +71,7 @@ export default function ProfileView() {
         targetRoles,
         locations,
         salaryFloor: salaryFloor ? Number(salaryFloor) : undefined,
+        outreachDailyCap: outreachDailyCap ? Number(outreachDailyCap) : undefined,
         mustHaves,
         dealBreakers,
       })
@@ -176,6 +179,18 @@ export default function ProfileView() {
               value={salaryFloor}
               onChange={(e) => setSalaryFloor(e.target.value)}
               placeholder="e.g. 120000"
+              className="rounded-lg border bg-transparent px-3 py-2 text-sm outline-none"
+              style={{ borderColor: colors.border, color: colors.text }}
+            />
+          </label>
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span style={{ color: colors.muted }}>Outreach daily cap (optional)</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              value={outreachDailyCap}
+              onChange={(e) => setOutreachDailyCap(e.target.value)}
+              placeholder="Default 10 — a soft warning, not a hard block"
               className="rounded-lg border bg-transparent px-3 py-2 text-sm outline-none"
               style={{ borderColor: colors.border, color: colors.text }}
             />

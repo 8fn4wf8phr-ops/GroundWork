@@ -681,6 +681,20 @@ yet in this project of why "the reported symptom is gone" and "the
 feature works" aren't the same claim — the acceptance test in the bug
 report itself is what caught the other two.
 
+**A fourth one, only visible in production:** raising `maxTokens` to
+4000 fixed local generation but made each real call take 25-40s — and
+the tailor route had no `maxDuration` export, so it was stuck on
+Vercel's platform default (well under that). Locally this doesn't
+matter (no such limit), so it only showed up once deployed: the browser
+saw "Quill is drafting…" for several seconds, then "Failed to fetch" —
+a raw fetch rejection rather than a clean error response, consistent
+with the platform killing the function mid-response rather than the
+route's own code returning an error. Fixed with
+`export const maxDuration = 60`, the same value the cron route
+(`app/api/cron/discover/route.ts`) already runs at successfully in
+production — direct proof 60s functions work on this project, not a
+guess about the plan's limits.
+
 ## What this leaves for next time
 
 - The browser extension (spec-mentioned, not started).

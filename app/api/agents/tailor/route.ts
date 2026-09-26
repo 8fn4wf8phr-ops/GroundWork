@@ -2,6 +2,14 @@ import { z } from "zod"
 import { AgentHttpError, agentRoute, parseStructured } from "@/lib/server/agent-route"
 import { findUnsupportedFigures, resolveSelection } from "@/lib/agents/tailor-resolve"
 
+// Quill generates a full cover letter plus summary/selections in one
+// structured-output call — confirmed live to take 25-40s for a real
+// resume, well past Vercel's platform default duration. Every other
+// agent route replies in a few hundred tokens and finishes fast enough
+// not to need this; the cron route already proves 60s works on this
+// project (app/api/cron/discover/route.ts).
+export const maxDuration = 60
+
 const TailorSchema = z.object({
   summary: z.string(),
   selectedSkills: z.array(z.string()),

@@ -765,6 +765,15 @@ and test-send) — all live against the real account, just stopping one
 hop short of actually dispatching mail. Once `RESEND_API_KEY` is set on
 Vercel, the test buttons are the way to confirm the last hop.
 
+**Same day, the last hop:** the user added `RESEND_API_KEY` to Vercel and
+gave a real notification email (set on the real Profile). Pushed and
+redeployed, then hit the real `/api/notifications/test` route in
+production for all three testable types: new-match (3 real qualifying
+jobs, sent), weekly-digest (sent), and follow-up (correctly reported
+nothing to send with no due applications, then sent once given one).
+User confirmed the emails actually arrived. All 4 types are now real,
+not just built — the one gap from the first pass is closed.
+
 ## What this leaves for next time
 
 - The browser extension (spec-mentioned, not started).
@@ -772,5 +781,3 @@ Vercel, the test buttons are the way to confirm the last hop.
   fields have the same latent null-vs-undefined gap as Section 24's
   `link` fix — none are known to be broken, but none have been checked
   against real Firestore data holding `null` in that field either.
-- The actual Resend send path (past the config check) is unverified —
-  needs `RESEND_API_KEY` set, which only the user can do.

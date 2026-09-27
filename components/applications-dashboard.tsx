@@ -4,6 +4,7 @@ import { useMemo, useState, type ReactNode } from "react"
 import { colors } from "@/lib/theme"
 import { useAuth } from "@/lib/auth-context"
 import { useApplications } from "@/lib/hooks/use-applications"
+import { useReviewQueue } from "@/lib/hooks/use-review-queue"
 import { APPLICATION_STATUSES, type ApplicationStatus, type ApplicationWithJob } from "@/lib/types"
 import AddApplicationModal from "@/components/applications/add-application-modal"
 import NeedsFollowUpBanner from "@/components/applications/needs-follow-up-banner"
@@ -197,6 +198,7 @@ export default function ApplicationsDashboard() {
   const { user } = useAuth()
   const [view, setView] = useState<View>("applications")
   const { applications, loading } = useApplications()
+  const { pending } = useReviewQueue()
   const [showAddModal, setShowAddModal] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const columns = useMemo(() => buildColumns(applications), [applications])
@@ -274,13 +276,14 @@ export default function ApplicationsDashboard() {
               <AgentAvatar kind="checklist" />
               <AgentAvatar kind="search" active />
             </div>
-            {view === "applications" && (
+            {view === "applications" && pending.length > 0 && (
               <button
                 type="button"
+                onClick={() => setView("review")}
                 className="rounded-lg px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
                 style={{ backgroundColor: colors.teal, color: colors.bg }}
               >
-                Review 3 new matches
+                Review {pending.length} new match{pending.length === 1 ? "" : "es"}
               </button>
             )}
             <UserMenu />

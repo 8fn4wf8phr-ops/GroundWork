@@ -29,6 +29,7 @@ export default function ProfileView() {
   const [locations, setLocations] = useState<string[]>([])
   const [salaryFloor, setSalaryFloor] = useState("")
   const [outreachDailyCap, setOutreachDailyCap] = useState("")
+  const [autoDismissBelow, setAutoDismissBelow] = useState("")
   const [mustHaves, setMustHaves] = useState<string[]>([])
   const [dealBreakers, setDealBreakers] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
@@ -50,6 +51,7 @@ export default function ProfileView() {
       setLocations(profile.locations)
       setSalaryFloor(profile.salaryFloor != null ? String(profile.salaryFloor) : "")
       setOutreachDailyCap(profile.outreachDailyCap != null ? String(profile.outreachDailyCap) : "")
+      setAutoDismissBelow(profile.autoDismissBelow != null ? String(profile.autoDismissBelow) : "")
       setMustHaves(profile.mustHaves)
       setDealBreakers(profile.dealBreakers)
     } else if (user?.email) {
@@ -72,6 +74,7 @@ export default function ProfileView() {
         locations,
         salaryFloor: salaryFloor ? Number(salaryFloor) : undefined,
         outreachDailyCap: outreachDailyCap ? Number(outreachDailyCap) : undefined,
+        autoDismissBelow: autoDismissBelow ? Number(autoDismissBelow) : undefined,
         mustHaves,
         dealBreakers,
       })
@@ -191,6 +194,20 @@ export default function ProfileView() {
               value={outreachDailyCap}
               onChange={(e) => setOutreachDailyCap(e.target.value)}
               placeholder="Default 10 — a soft warning, not a hard block"
+              className="rounded-lg border bg-transparent px-3 py-2 text-sm outline-none"
+              style={{ borderColor: colors.border, color: colors.text }}
+            />
+          </label>
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span style={{ color: colors.muted }}>Auto-dismiss matches below % (optional)</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={100}
+              value={autoDismissBelow}
+              onChange={(e) => setAutoDismissBelow(e.target.value)}
+              placeholder="Unset — new postings never auto-dismissed"
               className="rounded-lg border bg-transparent px-3 py-2 text-sm outline-none"
               style={{ borderColor: colors.border, color: colors.text }}
             />

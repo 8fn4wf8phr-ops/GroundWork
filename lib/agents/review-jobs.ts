@@ -18,7 +18,8 @@ export async function reviewTopNewJobs(
   // A saved Job already carries everything the concern check needs
   // (source, company, title, description), so there's no second,
   // index-aligned list of raw postings to keep in sync with it.
-  const topJobs = [...savedJobs]
+  const topJobs = savedJobs
+    .filter((j) => j.reviewStatus !== "dismissed")
     .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0))
     .slice(0, MAX_JOBS_TO_REVIEW)
 

@@ -1,5 +1,6 @@
 import { buildReviewPayload } from "@/lib/agents/review-payload"
 import { clip } from "@/lib/clip"
+import type { NewCaseFileEntry } from "@/lib/firestore/case-file"
 import type { DiscoveredJob } from "@/lib/discovery/types"
 import { computeMatchScore } from "@/lib/matching/score"
 import { MAX_JOBS_PER_REVIEW, type CaseFileEntryDraft, type ProfileInput, type JobInput } from "@/lib/server/review-jobs"
@@ -29,7 +30,10 @@ export interface DiscoveryStore {
   listEnabledUsers(limit: number): Promise<ScheduledUser[]>
   getExistingJobs(uid: string): Promise<Job[]>
   saveJobs(uid: string, jobs: NewJob[]): Promise<Job[]>
-  writeCaseFileEntries(uid: string, entries: CaseFileEntryDraft[]): Promise<void>
+  // NewCaseFileEntry (the general Firestore-level shape), not the
+  // narrower CaseFileEntryDraft — this also carries jobId-less batch notes
+  // like the auto-dismiss summary below, which aren't about one Job.
+  writeCaseFileEntries(uid: string, entries: NewCaseFileEntry[]): Promise<void>
   recordRun(uid: string, patch: { lastRunAt?: string; lastRunSummary: string }): Promise<void>
 }
 
@@ -41,12 +45,24 @@ export type Reviewer = (jobs: JobInput[], profile: ProfileInput) => Promise<Case
 // whether to call it. Null when RESEND_API_KEY isn't configured, same
 // nullable-when-unconfigured pattern as Reviewer.
 export type Emailer = (to: string, jobs: Job[]) => Promise<void>
+// One Compass note for a whole batch of auto-dismissed postings (opt-in
+// Profile.autoDismissBelow) rather than one entry per posting — see
+// lib/server/dismiss-summary.ts, which both this and the interactive
+// route (app/api/agents/dismiss-summary) call. Null when no Anthropic key
+// is configured, same nullable-when-unconfigured pattern as Reviewer.
+export type DismissSummarizer = (args: {
+  count: number
+  threshold: number
+  sampleTitles: string[]
+  targetRoles: string[]
+}) => Promise<string>
 
 export type UserResult = {
   user: string
   status: "ran" | "skipped" | "error"
   saved: number
   reviewed: number
+  autoDismissed: number
   notes: string[]
 }
 
@@ -85,7 +101,11 @@ export function selectNewJobs(
       dateDiscovered: now.toISOString(),
       matchScore: score,
       matchReasons: reasons,
-      reviewStatus: "pending",
+      // Opt-in auto-dismiss (Profile.autoDismissBelow, unset by default) —
+      // same reasoning as the manual-pull path in lib/firestore/jobs.ts:
+      // still saved either way (dedup needs every past posting present),
+      // just never surfaced in the queue.
+      reviewStatus: profile.autoDismissBelow != null && score < profile.autoDismissBelow ? "dismissed" : "pending",
     })
   }
   return selected.sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0)).slice(0, MAX_NEW_JOBS_PER_RUN)
@@ -100,7 +120,7 @@ async function runForUser(
   { uid, profile }: ScheduledUser,
   force: boolean,
 ): Promise<UserResult> {
-  const result: UserResult = { user: uid.slice(0, 6), status: "ran", saved: 0, reviewed: 0, notes: [] }
+  const result: UserResult = { user: uid.slice(0, 6), status: "ran", saved: 0, reviewed: 0, autoDismissed: 0, notes: [] }
   const settings = profile.scheduledDiscovery
   const sources = (settings?.sources ?? []).filter(isKnownSource)
 
@@ -141,11 +161,33 @@ async function runForUser(
     }
   }
 
+  // Split out anything the opt-in auto-dismiss threshold already filed
+  // away — those never go through the per-job Compass/Scout review below
+  // (that would defeat the point: one batch note instead of one entry
+  // each), and don't count toward "reviewed."
+  const toReview = saved.filter((j) => j.reviewStatus !== "dismissed")
+  const autoDismissed = saved.filter((j) => j.reviewStatus === "dismissed")
+  result.autoDismissed = autoDismissed.length
+
+  if (autoDismissed.length > 0 && deps.dismissSummarizer) {
+    try {
+      const message = await deps.dismissSummarizer({
+        count: autoDismissed.length,
+        threshold: profile.autoDismissBelow ?? 0,
+        sampleTitles: autoDismissed.slice(0, 10).map((j) => j.title),
+        targetRoles: profile.targetRoles.slice(0, 20).map((r) => clip(r, 200)),
+      })
+      await deps.store.writeCaseFileEntries(uid, [{ agent: "Compass", message }])
+    } catch (err) {
+      result.notes.push(`dismiss summary failed: ${errorText(err)}`)
+    }
+  }
+
   // Agent commentary is a bonus layer on real, already-saved Jobs: a
   // failure here never undoes the save. It also needs target roles — with
   // none, every score is meaningless and there's nothing for Compass to say.
-  if (saved.length > 0 && deps.reviewer && profile.targetRoles.length > 0) {
-    const top = [...saved].sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0)).slice(0, MAX_JOBS_PER_REVIEW)
+  if (toReview.length > 0 && deps.reviewer && profile.targetRoles.length > 0) {
+    const top = [...toReview].sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0)).slice(0, MAX_JOBS_PER_REVIEW)
     try {
       const entries = await deps.reviewer(
         top.map((job) => buildReviewPayload(job, existing)),
@@ -160,8 +202,9 @@ async function runForUser(
 
   const summary =
     saved.length > 0
-      ? `Added ${saved.length} new match${saved.length === 1 ? "" : "es"}` +
-        (result.reviewed > 0 ? `, reviewed the top ${result.reviewed}.` : ".")
+      ? `Added ${toReview.length} new match${toReview.length === 1 ? "" : "es"}` +
+        (result.reviewed > 0 ? `, reviewed the top ${result.reviewed}` : "") +
+        (autoDismissed.length > 0 ? `, auto-dismissed ${autoDismissed.length} below threshold.` : ".")
       : anySourceWorked
         ? "No new matches."
         : "Couldn't reach any source."
@@ -184,6 +227,9 @@ export type DiscoveryDeps = {
   // null when no RESEND_API_KEY is configured: jobs are still saved, just
   // without a notification.
   emailer: Emailer | null
+  // null when no Anthropic key is configured: auto-dismissed jobs are
+  // still filed away, just without a case-file note about it.
+  dismissSummarizer: DismissSummarizer | null
   now: Date
 }
 
@@ -199,7 +245,14 @@ export async function runScheduledDiscovery(
     try {
       results.push(await runForUser(deps, user, options.force ?? false))
     } catch (err) {
-      results.push({ user: user.uid.slice(0, 6), status: "error", saved: 0, reviewed: 0, notes: [errorText(err)] })
+      results.push({
+        user: user.uid.slice(0, 6),
+        status: "error",
+        saved: 0,
+        reviewed: 0,
+        autoDismissed: 0,
+        notes: [errorText(err)],
+      })
     }
   }
   return { users: results }

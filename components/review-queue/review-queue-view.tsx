@@ -12,10 +12,11 @@ import { fetchJobicyJobsForProfile } from "@/lib/discovery/jobicy"
 import { fetchThemuseJobs } from "@/lib/discovery/themuse"
 import { fetchUsajobsForProfile } from "@/lib/discovery/usajobs"
 import { fetchWeWorkRemotelyJobs } from "@/lib/discovery/wwr"
-import { saveDiscoveredJobs, dismissJob } from "@/lib/firestore/jobs"
+import { saveDiscoveredJobs, dismissJob, dismissJobs } from "@/lib/firestore/jobs"
 import { createApplicationFromJob } from "@/lib/firestore/applications"
 import { createCaseFileEntries } from "@/lib/firestore/case-file"
 import { reviewTopNewJobs } from "@/lib/agents/review-jobs"
+import { summarizeDismissal } from "@/lib/agents/dismiss-summary"
 import { postAgent } from "@/lib/agents/client"
 import type { DiscoveredJob } from "@/lib/discovery/types"
 import type { Job, Profile } from "@/lib/types"
@@ -129,6 +130,28 @@ export default function ReviewQueueView() {
   const [pulling, setPulling] = useState(false)
   const [pullMessage, setPullMessage] = useState<string | null>(null)
   const [busyJobId, setBusyJobId] = useState<string | null>(null)
+  const [dismissThreshold, setDismissThreshold] = useState("50")
+  const [confirmingSweep, setConfirmingSweep] = useState(false)
+  const [sweeping, setSweeping] = useState(false)
+
+  // Shared by the manual "Dismiss lowest match %" sweep and the opt-in
+  // auto-dismiss-during-a-pull path below — one Compass case-file note per
+  // batch, never one per posting. Best-effort: a narration failure never
+  // undoes the (already-committed) dismissal.
+  const postDismissSummary = async (dismissed: Job[], threshold: number) => {
+    if (!user || dismissed.length === 0) return
+    try {
+      const message = await summarizeDismissal({
+        count: dismissed.length,
+        threshold,
+        sampleTitles: dismissed.slice(0, 10).map((j) => j.title),
+        targetRoles: (profile?.targetRoles ?? []).slice(0, 20),
+      })
+      await createCaseFileEntries(user.uid, [{ agent: "Compass", message }])
+    } catch {
+      // ignore — see comment above
+    }
+  }
 
   const pull = async () => {
     if (!user) return
@@ -155,6 +178,10 @@ export default function ReviewQueueView() {
           // Agent commentary is a bonus layer on top of real, already-saved
           // Jobs — a failure here shouldn't block the pull itself or hide
           // that the postings landed successfully.
+        }
+        if (profile.autoDismissBelow != null) {
+          const autoDismissed = savedJobs.filter((j) => j.reviewStatus === "dismissed")
+          await postDismissSummary(autoDismissed, profile.autoDismissBelow)
         }
         if (profile.notificationEmail) {
           try {
@@ -209,6 +236,24 @@ export default function ReviewQueueView() {
     }
   }
 
+  const threshold = Number(dismissThreshold) || 0
+  const belowThreshold = pending.filter((j) => (j.matchScore ?? 0) < threshold)
+
+  const sweepDismiss = async () => {
+    if (!confirmingSweep) {
+      setConfirmingSweep(true)
+      return
+    }
+    setSweeping(true)
+    try {
+      await dismissJobs(belowThreshold.map((j) => j.id))
+      await postDismissSummary(belowThreshold, threshold)
+    } finally {
+      setSweeping(false)
+      setConfirmingSweep(false)
+    }
+  }
+
   return (
     <div className="mx-auto w-full max-w-3xl p-6">
       <div className="mb-2 flex items-center justify-between">
@@ -245,6 +290,65 @@ export default function ReviewQueueView() {
           </button>
         </div>
       </div>
+
+      {pending.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border p-3" style={{ borderColor: colors.border }}>
+          <span className="text-sm" style={{ color: colors.muted }}>
+            Dismiss lowest match %:
+          </span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={100}
+            value={dismissThreshold}
+            onChange={(e) => {
+              setDismissThreshold(e.target.value)
+              setConfirmingSweep(false)
+            }}
+            className="w-16 rounded-md border bg-transparent px-2 py-1 text-sm outline-none"
+            style={{ borderColor: colors.border, color: colors.text }}
+          />
+          <span className="text-sm" style={{ color: colors.muted }}>
+            %
+          </span>
+          {confirmingSweep ? (
+            <>
+              <span className="text-sm" style={{ color: colors.amber }}>
+                Dismiss {belowThreshold.length} match{belowThreshold.length === 1 ? "" : "es"} scoring below{" "}
+                {threshold}%? This can't be undone.
+              </span>
+              <button
+                type="button"
+                disabled={sweeping}
+                onClick={sweepDismiss}
+                className="rounded-md px-3 py-1.5 text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-60"
+                style={{ backgroundColor: colors.amber, color: colors.bg }}
+              >
+                {sweeping ? "Dismissing…" : "Confirm"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmingSweep(false)}
+                className="text-sm underline underline-offset-2"
+                style={{ color: colors.muted }}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              disabled={belowThreshold.length === 0}
+              onClick={sweepDismiss}
+              className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:opacity-90 disabled:opacity-50"
+              style={{ borderColor: colors.border, color: colors.text }}
+            >
+              Dismiss lowest match % ({belowThreshold.length})
+            </button>
+          )}
+        </div>
+      )}
 
       {pullMessage && (
         <p className="mb-4 text-sm" style={{ color: colors.muted }}>

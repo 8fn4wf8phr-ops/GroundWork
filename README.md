@@ -22,7 +22,9 @@ pursue/dismiss, keyword-overlap match scoring, all 7 spec-listed job
 sources wired (Arbeitnow, Adzuna, RemoteOK, Jobicy, The Muse, USAJobs,
 We Work Remotely). Pulling is a manual "Pull new postings" click, or
 opt-in daily via Vercel Cron — see [Scheduling](#scheduling-daily-opt-in)
-below.
+below. A manual "Dismiss lowest match %" sweep and an opt-in
+`Auto-dismiss matches below __%` Profile setting keep low scorers from
+piling up one entry at a time — see JOURNEY.md §27.
 
 **Also complete:** the real seven-agent system (Compass, Scout, Sage,
 Quill, Ledger, Lens, Herald — see JOURNEY.md §15-17, §26), structured

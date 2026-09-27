@@ -129,6 +129,12 @@ export type Profile = {
   // Undefined means the default of 10, same optional-with-fallback
   // pattern as everything else here.
   outreachDailyCap?: number
+  // Opt-in, unset by default: when set, newly-discovered postings scoring
+  // below this percentage never enter the Review queue — Scout/Compass
+  // file them straight to dismissed instead (lib/firestore/jobs.ts,
+  // lib/server/scheduled-discovery.ts), logged as one batch case-file
+  // note rather than one entry per posting.
+  autoDismissBelow?: number
   updatedAt: string
 }
 

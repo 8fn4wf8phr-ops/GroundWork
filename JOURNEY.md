@@ -860,6 +860,67 @@ doesn't affect real usage since the app only ever queries `outreach` by
 ownerId, never gets a specific doc by id directly. Outreach is now fully
 live, not just built.
 
+## 27. Bulk-dismiss lowest match % + opt-in auto-dismiss
+
+Two pieces from one spec, both extending Compass rather than adding a new
+agent: a manual "Dismiss lowest match %" sweep on the Review queue (a
+threshold input, a count-aware button, an inline confirm using the spec's
+exact wording), and an opt-in `Profile.autoDismissBelow` that files new
+low scorers straight to dismissed during discovery instead of ever
+surfacing them. Either way, one Compass case-file note per batch — never
+one per posting, which was the whole point.
+
+**Shared summarizer, two call sites.** `lib/server/dismiss-summary.ts`'s
+`summarizeDismissal()` is called directly (no HTTP hop) by both the new
+`app/api/agents/dismiss-summary` route (the browser: the manual sweep,
+and the manual-pull auto-dismiss path) and the scheduled-discovery cron
+— same pattern this project already uses for `reviewJobs()`.
+
+**A type that was quietly too narrow.** `DiscoveryStore.writeCaseFileEntries`
+took `CaseFileEntryDraft[]`, which requires a `jobId` — fine for
+Compass/Scout's per-job exchanges, wrong for a jobId-less batch note like
+this one. Widened it to `NewCaseFileEntry[]` (the actual Firestore-level
+shape, which already has `jobId?` optional) — a safe widening, since
+`CaseFileEntryDraft` was already structurally assignable to it. Confirmed
+by checking existing precedent first: Sage's and Herald's own case-file
+entries already skip `jobId` entirely when there's no single Job to
+attach to, so a standalone `{agent, message}` entry was already a
+supported shape, just not one this particular interface's type
+admitted yet.
+
+**The coarse scoring rubric shapes what auto-dismiss can actually do.**
+`computeMatchScore` only ever produces 0/25/50/75/100 (each rubric
+component is all-or-nothing), and the scheduled-discovery cron already
+discards anything below `MIN_MATCH_SCORE = 30` outright, before this
+feature's threshold check ever runs. Practical consequence, confirmed by
+testing: with the spec's own suggested default (50%), the cron path's
+auto-dismiss can never actually fire, because the only scores it would
+catch (0 or 25) are already gone by the time the check runs — it only
+does anything there if a user sets the threshold *above* 50. The manual
+*pull* path has no such floor (it saves everything regardless of score),
+so that's where this setting has its real, everyday effect. Not a bug —
+just worth knowing why a low default "does nothing" on the cron side.
+
+Verified end to end: an in-memory `DiscoveryStore` test exercising both
+branches of the cron path (a score-50 posting correctly dismissed under
+threshold 60, a score-100 one correctly kept and reviewed, one real
+Compass note for the dismissed one), the manual-pull threshold math by
+hand, and — the one that actually matters — a full real-browser run
+against a throwaway account (signed in via a minted custom token, same
+technique as the outreach verification): seeded 5 real Jobs at scores
+0/0/25/75/100, clicked "Dismiss lowest match % (3)", got the exact
+confirm sentence from the spec, confirmed, and got back a real Compass
+note — *"Cleared 3 postings under the 50% threshold — Retail Associate,
+Auto Mechanic, Danish-speaking Consultant — none with any technical or
+software development overlap, so an easy cut."* — while the two real
+matches stayed untouched. (One red herring along the way: a first pass
+showed no case-file entry at all, which briefly looked like a real bug
+until closer inspection showed the test script itself had closed the
+browser before the async narration call finished, aborting the write in
+flight — not an application bug. Confirmed by rerunning with a longer
+wait.) Throwaway account and all its data deleted and confirmed gone
+afterward.
+
 ## What this leaves for next time
 
 - The browser extension (spec-mentioned, not started).

@@ -13,6 +13,7 @@ import { AdminConfigError, getAdminDb } from "@/lib/server/firebase-admin"
 import { callAdzuna } from "@/lib/server/adzuna-api"
 import { createAdminStore } from "@/lib/server/admin-store"
 import { reviewJobs } from "@/lib/server/review-jobs"
+import { summarizeDismissal } from "@/lib/server/dismiss-summary"
 import { runScheduledDiscovery } from "@/lib/server/scheduled-discovery"
 import { sendEmail } from "@/lib/email"
 import { buildNewMatchEmail } from "@/lib/email/templates"
@@ -57,6 +58,7 @@ export async function GET(request: NextRequest) {
           weworkremotely: () => fetchWeWorkRemotelyJobs(callWwr),
         },
         reviewer: client ? (jobs, profile) => reviewJobs(client, jobs, profile) : null,
+        dismissSummarizer: client ? (args) => summarizeDismissal(client, args) : null,
         emailer: emailingEnabled
           ? async (to, jobs) => {
               const email = buildNewMatchEmail(

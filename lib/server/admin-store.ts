@@ -1,5 +1,5 @@
 import type { Firestore } from "firebase-admin/firestore"
-import type { CaseFileEntryDraft } from "@/lib/server/review-jobs"
+import type { NewCaseFileEntry } from "@/lib/firestore/case-file"
 import type { DiscoveryStore, NewJob, ScheduledUser } from "@/lib/server/scheduled-discovery"
 import type { Job, Profile } from "@/lib/types"
 
@@ -50,7 +50,7 @@ export function createAdminStore(db: Firestore): DiscoveryStore {
       return saved
     },
 
-    async writeCaseFileEntries(uid, entries: CaseFileEntryDraft[]) {
+    async writeCaseFileEntries(uid, entries: NewCaseFileEntry[]) {
       const batch = db.batch()
       const now = new Date().toISOString()
       for (const entry of entries) {

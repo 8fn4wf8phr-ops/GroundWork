@@ -50,7 +50,13 @@ export async function saveDiscoveredJobs(
       dateDiscovered: now,
       matchScore: score,
       matchReasons: reasons,
-      reviewStatus: "pending" as const,
+      // Opt-in auto-dismiss (Profile.autoDismissBelow, unset by default):
+      // a posting still gets saved either way — dedup depends on every
+      // past posting staying in Firestore, dismissed or not — it's only
+      // reviewStatus that changes, so it never surfaces in the queue.
+      reviewStatus: (profile.autoDismissBelow != null && score < profile.autoDismissBelow
+        ? "dismissed"
+        : "pending") as "dismissed" | "pending",
     }
     batch.set(ref, jobData)
     savedJobs.push({ id: ref.id, ...jobData })
@@ -61,4 +67,19 @@ export async function saveDiscoveredJobs(
 
 export async function dismissJob(jobId: string) {
   await updateDoc(doc(db, "jobs", jobId), { reviewStatus: "dismissed" })
+}
+
+// Firestore's write-batch limit is 500 operations; chunked the same way
+// admin-store.ts chunks scheduled-discovery saves, for the same reason —
+// a big enough "Dismiss lowest match %" sweep could exceed one batch.
+const BATCH_SIZE = 400
+
+export async function dismissJobs(jobIds: string[]) {
+  for (let i = 0; i < jobIds.length; i += BATCH_SIZE) {
+    const batch = writeBatch(db)
+    for (const jobId of jobIds.slice(i, i + BATCH_SIZE)) {
+      batch.update(doc(db, "jobs", jobId), { reviewStatus: "dismissed" })
+    }
+    await batch.commit()
+  }
 }

@@ -4,7 +4,14 @@ import { useState } from "react"
 import { colors } from "@/lib/theme"
 import { useAuth } from "@/lib/auth-context"
 import { useApplications } from "@/lib/hooks/use-applications"
-import { computeOverallStats, computeRatesByChannel, computeRatesBySource, type RateGroup } from "@/lib/analytics"
+import {
+  computeOverallStats,
+  computeRatesByChannel,
+  computeRatesBySource,
+  computePursueRatesBySource,
+  type RateGroup,
+  type SourceFunnelGroup,
+} from "@/lib/analytics"
 import { computeRejectionPatterns } from "@/lib/rejection-reasons"
 import { detectNotablePattern } from "@/lib/agents/pattern-signals"
 import { generateDigest } from "@/lib/agents/lens"
@@ -103,12 +110,52 @@ function RejectionPatternsSection({ applications }: { applications: ApplicationW
   )
 }
 
+function PursueRateSection({ groups }: { groups: SourceFunnelGroup[] }) {
+  return (
+    <div>
+      <h3 className="mb-1 text-sm font-semibold uppercase tracking-wide" style={{ color: colors.muted }}>
+        Pursue rate by source
+      </h3>
+      <p className="mb-3 text-xs" style={{ color: colors.muted }}>
+        Of everything each source has turned up, what fraction you pursued vs. dismissed — a consistently-ignored
+        source is a candidate to turn off.
+      </p>
+      {groups.length === 0 ? (
+        <p className="text-sm" style={{ color: colors.muted }}>
+          No discovered postings yet.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {groups.map((group) => (
+            <div key={group.key} className="rounded-lg border p-4" style={{ backgroundColor: colors.card, borderColor: colors.border }}>
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-sm font-semibold" style={{ color: colors.text }}>
+                  {group.label}
+                </span>
+                <span className="text-xs" style={{ color: colors.muted }}>
+                  {group.discovered} discovered
+                  {group.pursued + group.dismissed < 3 ? " — not enough decided yet" : ""}
+                </span>
+              </div>
+              <RateMeter label="Pursue" value={group.pursueRate} />
+              <p className="mt-2 text-xs" style={{ color: colors.muted }}>
+                {group.pursued} pursued · {group.dismissed} dismissed · {group.pending} still pending
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AnalyticsView() {
   const { user } = useAuth()
-  const { applications, loading } = useApplications()
+  const { applications, jobs, loading } = useApplications()
   const overall = computeOverallStats(applications)
   const byChannel = computeRatesByChannel(applications)
   const bySource = computeRatesBySource(applications)
+  const pursueRates = computePursueRatesBySource(jobs, applications)
   const [askingLens, setAskingLens] = useState(false)
   const [lensMessage, setLensMessage] = useState<string | null>(null)
 
@@ -170,25 +217,30 @@ export default function AnalyticsView() {
         </p>
       )}
 
-      {overall.appliedCount === 0 ? (
+      {overall.appliedCount === 0 && jobs.length === 0 ? (
         <div
           className="rounded-lg border border-dashed p-8 text-center text-sm"
           style={{ borderColor: colors.border, color: colors.muted }}
         >
-          Nothing to analyze yet — once you&apos;ve applied to a few postings, rates will show up here.
+          Nothing to analyze yet — once you&apos;ve pulled or applied to a few postings, rates will show up here.
         </div>
       ) : (
         <div className="flex flex-col gap-8">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatTile label="Total applications" value={String(overall.totalApplications)} />
-            <StatTile label="Response rate" value={`${overall.responseRate}%`} />
-            <StatTile label="Interview rate" value={`${overall.interviewRate}%`} />
-            <StatTile label="Offer rate" value={`${overall.offerRate}%`} />
-          </div>
+          {overall.appliedCount > 0 && (
+            <>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <StatTile label="Total applications" value={String(overall.totalApplications)} />
+                <StatTile label="Response rate" value={`${overall.responseRate}%`} />
+                <StatTile label="Interview rate" value={`${overall.interviewRate}%`} />
+                <StatTile label="Offer rate" value={`${overall.offerRate}%`} />
+              </div>
 
-          <GroupSection title="By channel" groups={byChannel} />
-          <GroupSection title="By source" groups={bySource} />
-          <RejectionPatternsSection applications={applications} />
+              <GroupSection title="By channel" groups={byChannel} />
+              <GroupSection title="By source" groups={bySource} />
+              <RejectionPatternsSection applications={applications} />
+            </>
+          )}
+          <PursueRateSection groups={pursueRates} />
         </div>
       )}
     </div>

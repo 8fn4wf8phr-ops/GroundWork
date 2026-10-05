@@ -1,4 +1,4 @@
-import type { ApplicationStatus, ApplicationWithJob, Channel, JobSource } from "@/lib/types"
+import type { Application, ApplicationStatus, ApplicationWithJob, Channel, Job, JobSource } from "@/lib/types"
 
 // Spec §9/§14/§15: response/interview/offer rates, sliced by channel and
 // source. The status pipeline is ordered (Found → Reviewed → Applied →
@@ -65,7 +65,7 @@ export function computeRatesByChannel(applications: ApplicationWithJob[]): RateG
   )
 }
 
-const SOURCE_LABELS: Record<JobSource, string> = {
+export const SOURCE_LABELS: Record<JobSource, string> = {
   adzuna: "Adzuna",
   arbeitnow: "Arbeitnow",
   remoteok: "RemoteOK",
@@ -104,4 +104,53 @@ function groupAndRate(
     rows.push({ key, label: labelOf(key), ...rates })
   }
   return rows.sort((a, b) => b.responseRate - a.responseRate)
+}
+
+// Source quality at the DISCOVERY stage, not the application stage — of
+// everything a source has ever turned up, what fraction got pursued vs.
+// dismissed, so a consistently-ignored source can be turned off (fewer
+// postings to wade through, fewer LLM calls on junk). This is a different
+// question from computeRatesBySource above (which only looks at postings
+// that became Applications and asks how they performed afterward) — a
+// source can have a great response rate on the few jobs pursued from it
+// while still being mostly noise overall.
+export type SourceFunnelGroup = {
+  key: string
+  label: string
+  discovered: number
+  pursued: number
+  dismissed: number
+  pending: number
+  // Of DECIDED postings only (pursued + dismissed) — a source that was
+  // just pulled and still has everything sitting pending shouldn't look
+  // like a 0% pursue rate, it just hasn't been judged yet.
+  pursueRate: number
+}
+
+export function computePursueRatesBySource(jobs: Job[], applications: Application[]): SourceFunnelGroup[] {
+  const pursuedJobIds = new Set(applications.map((a) => a.jobId))
+  const groups = new Map<string, Job[]>()
+  for (const job of jobs) {
+    const key = job.source ?? "unknown"
+    const list = groups.get(key) ?? []
+    list.push(job)
+    groups.set(key, list)
+  }
+
+  const rows: SourceFunnelGroup[] = []
+  for (const [key, list] of groups) {
+    const pursued = list.filter((j) => pursuedJobIds.has(j.id)).length
+    const dismissed = list.filter((j) => j.reviewStatus === "dismissed" && !pursuedJobIds.has(j.id)).length
+    const decided = pursued + dismissed
+    rows.push({
+      key,
+      label: key === "unknown" ? "Unknown source" : (SOURCE_LABELS[key as JobSource] ?? key),
+      discovered: list.length,
+      pursued,
+      dismissed,
+      pending: list.length - decided,
+      pursueRate: decided > 0 ? Math.round((pursued / decided) * 100) : 0,
+    })
+  }
+  return rows.sort((a, b) => b.discovered - a.discovered)
 }

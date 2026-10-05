@@ -2,6 +2,7 @@ import { collection, doc, getDocs, onSnapshot, query, updateDoc, where, writeBat
 import { db } from "@/lib/firebase"
 import type { DiscoveredJob } from "@/lib/discovery/types"
 import { computeMatchScore } from "@/lib/matching/score"
+import { hasSeenJob, markSeenJob } from "@/lib/matching/dedupe"
 import type { Job, Profile } from "@/lib/types"
 
 export function subscribeToJobs(ownerId: string, onChange: (jobs: Job[]) => void) {
@@ -19,30 +20,37 @@ export type SaveDiscoveredJobsResult = {
   existingJobs: Job[]
 }
 
-// Writes only the postings not already seen from this source (matched by
-// the source's own externalId — spec Section 7, Scout "dedupes against
-// existing Jobs"), scoring each one against the Profile as it's saved.
-// A single batch: Arbeitnow returns 250 postings/page, well under
-// Firestore's 500-write batch limit.
+// Writes only the postings not already seen — by the source's own
+// externalId (spec Section 7, Scout "dedupes against existing Jobs") OR by
+// company+title, so the same real posting cross-listed on a different
+// source doesn't show up twice in the Review queue (see lib/matching/dedupe.ts)
+// — scoring each one against the Profile as it's saved. A single batch:
+// Arbeitnow returns 250 postings/page, well under Firestore's 500-write
+// batch limit.
 export async function saveDiscoveredJobs(
   ownerId: string,
   discovered: DiscoveredJob[],
   profile: Profile,
+  resumeSkills: string[] = [],
 ): Promise<SaveDiscoveredJobsResult> {
   const existingSnap = await getDocs(query(collection(db, "jobs"), where("ownerId", "==", ownerId)))
   const existingJobs = existingSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Job)
-  const seenExternalIds = new Set(
-    existingJobs.filter((j) => j.source === discovered[0]?.source).map((j) => j.externalId),
-  )
+  const seen = new Set<string>()
+  for (const job of existingJobs) markSeenJob(seen, job)
 
-  const newPostings = discovered.filter((p) => !p.externalId || !seenExternalIds.has(p.externalId))
+  const newPostings: DiscoveredJob[] = []
+  for (const posting of discovered) {
+    if (hasSeenJob(seen, posting)) continue
+    markSeenJob(seen, posting)
+    newPostings.push(posting)
+  }
   if (newPostings.length === 0) return { savedJobs: [], existingJobs }
 
   const batch = writeBatch(db)
   const now = new Date().toISOString()
   const savedJobs: Job[] = []
   for (const posting of newPostings) {
-    const { score, reasons } = computeMatchScore(posting, profile)
+    const { score, reasons } = computeMatchScore(posting, profile, resumeSkills)
     const ref = doc(collection(db, "jobs"))
     const jobData = {
       ...posting,

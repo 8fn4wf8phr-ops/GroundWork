@@ -52,5 +52,9 @@ export function useApplications() {
     return applications.map((app) => ({ ...app, job: jobsById.get(app.jobId) }))
   }, [applications, jobs])
 
-  return { applications: applicationsWithJobs, loading }
+  // Raw jobs (not just the ones that became Applications) alongside the
+  // joined view — the Analytics page's per-source pursue-rate funnel
+  // (lib/analytics.ts) needs dismissed/pending Jobs too, and this
+  // subscription already has them in hand.
+  return { applications: applicationsWithJobs, jobs, loading }
 }

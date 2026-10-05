@@ -14,20 +14,28 @@ export function createAdminStore(db: Firestore): DiscoveryStore {
   return {
     async listEnabledUsers(limit) {
       const snap = await db.collection("profiles").where("scheduledDiscovery.enabled", "==", true).limit(limit).get()
-      return snap.docs.map((d): ScheduledUser => {
-        const data = d.data() as Partial<Profile>
-        return {
-          uid: d.id,
-          profile: {
-            ...(data as Profile),
-            ownerId: d.id,
-            targetRoles: data.targetRoles ?? [],
-            locations: data.locations ?? [],
-            mustHaves: data.mustHaves ?? [],
-            dealBreakers: data.dealBreakers ?? [],
-          },
-        }
-      })
+      return Promise.all(
+        snap.docs.map(async (d): Promise<ScheduledUser> => {
+          const data = d.data() as Partial<Profile>
+          // One extra read per enabled user, once a day — same skills
+          // signal the manual pull path gets from Resume (lib/matching/score.ts).
+          // Missing Resume/Skills just falls back to the no-skills weighting.
+          const resumeSnap = await db.collection("resumes").doc(d.id).get()
+          const resumeSkills: string[] = (resumeSnap.data()?.skills as string[] | undefined) ?? []
+          return {
+            uid: d.id,
+            resumeSkills,
+            profile: {
+              ...(data as Profile),
+              ownerId: d.id,
+              targetRoles: data.targetRoles ?? [],
+              locations: data.locations ?? [],
+              mustHaves: data.mustHaves ?? [],
+              dealBreakers: data.dealBreakers ?? [],
+            },
+          }
+        }),
+      )
     },
 
     async getExistingJobs(uid) {

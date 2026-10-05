@@ -921,6 +921,100 @@ flight — not an application bug. Confirmed by rerunning with a longer
 wait.) Throwaway account and all its data deleted and confirmed gone
 afterward.
 
+## 28. Match quality and cost (seniority scoring, resume skills, cheap-rules-first, cross-source dedupe, pursue rate)
+
+A backlog from real usage, not a written spec — five related complaints
+about `lib/matching/score.ts` and the Review queue, tackled together since
+they all touch the same scoring/discovery pipeline:
+
+**Seniority scoring was a real bug, not just a flag.** Staff/Principal/
+Director postings were landing at 55-75% because the title-overlap
+component only ever checked for role-NAME overlap ("engineer" in "Staff
+Engineer"), never seniority tier. Added `SENIOR_TITLE_PATTERN` (word-
+boundary regex covering Senior/Sr/Staff/Lead/Principal/Director/VP/Head
+of) checked against the raw title; when it hits and none of the user's own
+target roles name that same tier, the *combined* score — not just the
+title component — gets multiplied by 0.25. Confirmed directly: "Staff
+Software Engineer" against a "Software Engineer" target role went from
+100 to 25; "Director of Engineering" from 50 to 13. A user who actually
+targets "Senior Software Engineer" is correctly exempted. Also added a
+built-in clearance-requirement flag (`CLEARANCE_PATTERN`, checked against
+raw untokenized text since the tokenizer strips the slash in "TS/SCI") —
+flagged via the existing "Possible red flag" reason prefix, same as
+user-configured deal-breakers, so no UI change was needed to pick it up.
+
+**Resume skills now feed scoring, not just title/location/must-haves.**
+`computeMatchScore` takes an optional `resumeSkills: string[]` and adds a
+fourth component (posting text vs. the user's actual Skills list). To
+avoid silently capping a no-resume user's max score at 75%, the weights
+rebalance based on whether skills were passed at all: 50/25/25 (role/
+location/must-have) with no skills, 40/15/20/25 (+skills) once they're
+available — confirmed both branches directly, including a case where a
+Rust/COBOL-only resume correctly *drags down* an otherwise-perfect title/
+location match (100 → 75), which is the point: title match alone doesn't
+mean you can do the job. Threaded through both scoring call sites — the
+manual pull path now calls `useResume()` in `review-queue-view.tsx` and
+passes `resume.skills`, the cron path's `admin-store.ts` does one extra
+Firestore read per enabled user (`resumes/{uid}`) inside the existing
+daily `listEnabledUsers` loop.
+
+**Cheap rules before the LLM call.** Both the manual pull's
+`reviewTopNewJobs` and the cron's `runForUser` now skip Compass commentary
+entirely for anything below a threshold — `profile.autoDismissBelow ??
+DEFAULT_COMMENTARY_THRESHOLD` (50) — rather than narrating whatever
+happened to be the top 3 regardless of how weak they were. Reuses the
+existing auto-dismiss field as "the user's threshold" instead of adding a
+sixth Profile setting; the two behaviors (filter out of the queue
+entirely vs. skip narration but still show it) are genuinely different,
+so a job scoring 35 with a default 50% commentary threshold is still
+visible in the queue for a human to eyeball, just without a Compass note.
+Verified against an in-memory `DiscoveryStore`: a 0%-match posting
+correctly dropped by the pre-existing `MIN_MATCH_SCORE=30` floor before
+this logic ever runs, a 50%-match one correctly saved AND narrated (`>=`
+is inclusive), confirming the boundary is where it should be.
+
+**Cross-source dedupe.** The same real posting cross-listed on two boards
+(e.g. the same req on both Adzuna and Arbeitnow) used to become two
+separate Jobs, because dedup kept the source as part of the identity key
+even in the company+title fallback. New `lib/matching/dedupe.ts` computes
+identity as company+title (source-agnostic) *plus* source-scoped
+externalId as a second key, checked against both — a posting matches if
+*either* key was already seen. Replaces the per-source-only check in
+`saveDiscoveredJobs` (lib/firestore/jobs.ts) and the source-keyed
+`dedupeKey` in `selectNewJobs` (lib/server/scheduled-discovery.ts).
+Verified with a direct unit test (same company+title, different source +
+externalId → correctly deduped; different title → correctly kept) and
+live: re-pulling Arbeitnow immediately after a first pull correctly
+reported "no new ones since last time" against all 325 real postings.
+
+**Lens: pursue rate per source.** Different question from the existing
+"By source" response/interview/offer breakdown in Analytics (which only
+looks at postings that became Applications) — this asks, of everything a
+source has ever surfaced, what fraction got pursued vs. dismissed, so a
+consistently-ignored source is visible as a candidate to turn off. New
+`computePursueRatesBySource` in `lib/analytics.ts`, fed by `jobs` now
+exposed from `useApplications()` (it was already subscribed internally to
+build `ApplicationWithJob`, just not returned) rather than a second
+Firestore subscription. New `PursueRateSection` in `analytics-view.tsx`,
+reusing `RateMeter`; shows even with zero real Applications, since it's a
+discovery-stage metric, not an application-stage one. Verified live with
+seeded data across three sources: RemoteOK showing **0% across 3
+postings** (an obviously-noisy source, exactly the "turn it off" signal
+this was built for), Arbeitnow 50%, Adzuna 100%, with the right
+"not enough decided yet" caveat on groups under 3 decided postings.
+
+All of this verified against a throwaway Firebase account (profile +
+resume + seeded Jobs/Applications across three sources, signed into a
+real headless Chrome via a minted custom token) and a real live Arbeitnow
+pull (325 real postings, scores in the 20-28% range reflecting real
+title+skills overlap, re-pull correctly deduped to zero new). Account and
+all data deleted and confirmed gone afterward. `tsc --noEmit` and
+`next build` both clean.
+
+This was one item off a 5-tier backlog (P1: match quality and cost); P2
+(mobile layout), P3 (Herald/workflow), P4 (reliability), and P5
+(portfolio) are still open.
+
 ## What this leaves for next time
 
 - The browser extension (spec-mentioned, not started).

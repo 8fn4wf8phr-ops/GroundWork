@@ -18,13 +18,19 @@ manual application entry with duplicate detection, application detail
 editing, Profile, Contacts, CSV export.
 
 **Phase 2 (Discovery + Matching) — complete.** Review Queue with
-pursue/dismiss, keyword-overlap match scoring, all 7 spec-listed job
-sources wired (Arbeitnow, Adzuna, RemoteOK, Jobicy, The Muse, USAJobs,
-We Work Remotely). Pulling is a manual "Pull new postings" click, or
-opt-in daily via Vercel Cron — see [Scheduling](#scheduling-daily-opt-in)
-below. A manual "Dismiss lowest match %" sweep and an opt-in
-`Auto-dismiss matches below __%` Profile setting keep low scorers from
-piling up one entry at a time — see JOURNEY.md §27.
+pursue/dismiss, keyword-overlap match scoring (now factoring in resume
+skills and penalizing seniority/title mismatches — see JOURNEY.md §28),
+all 7 spec-listed job sources wired (Arbeitnow, Adzuna, RemoteOK, Jobicy,
+The Muse, USAJobs, We Work Remotely), cross-source dedupe so the same
+posting cross-listed on two boards doesn't show up twice. Pulling is a
+manual "Pull new postings" click, or opt-in daily via Vercel Cron — see
+[Scheduling](#scheduling-daily-opt-in) below. A manual "Dismiss lowest
+match %" sweep and an opt-in `Auto-dismiss matches below __%` Profile
+setting keep low scorers from piling up one entry at a time — see
+JOURNEY.md §27. Compass's LLM commentary is skipped below that same
+threshold (cheap rules before the expensive one), and Analytics shows a
+per-source pursue rate so a consistently-ignored source is easy to spot
+and turn off — see JOURNEY.md §28.
 
 **Also complete:** the real seven-agent system (Compass, Scout, Sage,
 Quill, Ledger, Lens, Herald — see JOURNEY.md §15-17, §26), structured

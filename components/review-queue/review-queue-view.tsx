@@ -4,6 +4,7 @@ import { useState } from "react"
 import { colors } from "@/lib/theme"
 import { useAuth } from "@/lib/auth-context"
 import { useProfile } from "@/lib/hooks/use-profile"
+import { useResume } from "@/lib/hooks/use-resume"
 import { useReviewQueue } from "@/lib/hooks/use-review-queue"
 import { fetchArbeitnowJobs } from "@/lib/discovery/arbeitnow"
 import { fetchAdzunaJobsForProfile } from "@/lib/discovery/adzuna"
@@ -125,6 +126,7 @@ function QueueCard({
 export default function ReviewQueueView() {
   const { user } = useAuth()
   const { profile } = useProfile()
+  const { resume } = useResume()
   const { pending, loading } = useReviewQueue()
   const [selectedSource, setSelectedSource] = useState<SourceId>("arbeitnow")
   const [pulling, setPulling] = useState(false)
@@ -164,6 +166,7 @@ export default function ReviewQueueView() {
         user.uid,
         postings,
         profile ?? EMPTY_PROFILE,
+        resume?.skills ?? [],
       )
       setPullMessage(
         savedJobs.length === 0

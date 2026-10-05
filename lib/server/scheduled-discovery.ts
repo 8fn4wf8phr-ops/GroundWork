@@ -2,7 +2,8 @@ import { buildReviewPayload } from "@/lib/agents/review-payload"
 import { clip } from "@/lib/clip"
 import type { NewCaseFileEntry } from "@/lib/firestore/case-file"
 import type { DiscoveredJob } from "@/lib/discovery/types"
-import { computeMatchScore } from "@/lib/matching/score"
+import { computeMatchScore, DEFAULT_COMMENTARY_THRESHOLD } from "@/lib/matching/score"
+import { hasSeenJob, markSeenJob } from "@/lib/matching/dedupe"
 import { MAX_JOBS_PER_REVIEW, type CaseFileEntryDraft, type ProfileInput, type JobInput } from "@/lib/server/review-jobs"
 import { SCHEDULED_SOURCES, type Job, type Profile, type ScheduledSourceId } from "@/lib/types"
 
@@ -23,7 +24,11 @@ export const MIN_MATCH_SCORE = 30
 export const MAX_NEW_JOBS_PER_RUN = 25
 export const MAX_USERS_PER_RUN = 25
 
-export type ScheduledUser = { uid: string; profile: Profile }
+// resumeSkills: fetched alongside the Profile (lib/server/admin-store.ts)
+// so scoring gets the same skills-vs-description signal the manual pull
+// path gets (lib/matching/score.ts) — empty for a user with no Resume or
+// no Skills filled in, which just falls back to the no-skills weighting.
+export type ScheduledUser = { uid: string; profile: Profile; resumeSkills: string[] }
 export type NewJob = Omit<Job, "id">
 
 export interface DiscoveryStore {
@@ -66,34 +71,28 @@ export type UserResult = {
   notes: string[]
 }
 
-const normalize = (s: string) => s.trim().toLowerCase()
-
-// A posting's identity for dedup: the source's own id when it has one
-// (same rule as the manual flow), else company + title within the source.
-function dedupeKey(job: { source: string; externalId?: string; company: string; title: string }): string {
-  return job.externalId
-    ? `${job.source}|id|${job.externalId}`
-    : `${job.source}|ct|${normalize(job.company)}|${normalize(job.title)}`
-}
-
 // Pure: which discovered postings become new Jobs. Drops anything already
 // stored (including ones the user dismissed — a dismissed Job stays in
-// Firestore, so it never resurfaces), duplicates within the batch, and
-// anything scoring below MIN_MATCH_SCORE; keeps the best MAX_NEW_JOBS_PER_RUN.
+// Firestore, so it never resurfaces) by cross-source identity (see
+// lib/matching/dedupe.ts — company+title, not just source+externalId, so
+// the same req cross-listed on two boards doesn't become two Jobs),
+// duplicates within the batch, and anything scoring below MIN_MATCH_SCORE;
+// keeps the best MAX_NEW_JOBS_PER_RUN.
 export function selectNewJobs(
   existing: Job[],
   discovered: DiscoveredJob[],
   profile: Profile,
   now: Date,
+  resumeSkills: string[] = [],
 ): NewJob[] {
-  const seen = new Set(existing.map(dedupeKey))
+  const seen = new Set<string>()
+  for (const job of existing) markSeenJob(seen, job)
   const selected: NewJob[] = []
   for (const posting of discovered) {
-    const key = dedupeKey(posting)
-    if (seen.has(key)) continue
-    seen.add(key)
+    if (hasSeenJob(seen, posting)) continue
+    markSeenJob(seen, posting)
 
-    const { score, reasons } = computeMatchScore(posting, profile)
+    const { score, reasons } = computeMatchScore(posting, profile, resumeSkills)
     if (score < MIN_MATCH_SCORE) continue
     selected.push({
       ...posting,
@@ -117,7 +116,7 @@ const errorText = (err: unknown) => clip(err instanceof Error ? err.message : St
 
 async function runForUser(
   deps: DiscoveryDeps,
-  { uid, profile }: ScheduledUser,
+  { uid, profile, resumeSkills }: ScheduledUser,
   force: boolean,
 ): Promise<UserResult> {
   const result: UserResult = { user: uid.slice(0, 6), status: "ran", saved: 0, reviewed: 0, autoDismissed: 0, notes: [] }
@@ -147,7 +146,7 @@ async function runForUser(
     }
   }
 
-  const fresh = selectNewJobs(existing, discovered, profile, deps.now)
+  const fresh = selectNewJobs(existing, discovered, profile, deps.now, resumeSkills)
   const saved = fresh.length > 0 ? await deps.store.saveJobs(uid, fresh) : []
   result.saved = saved.length
 
@@ -186,8 +185,13 @@ async function runForUser(
   // Agent commentary is a bonus layer on real, already-saved Jobs: a
   // failure here never undoes the save. It also needs target roles — with
   // none, every score is meaningless and there's nothing for Compass to say.
-  if (toReview.length > 0 && deps.reviewer && profile.targetRoles.length > 0) {
-    const top = [...toReview].sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0)).slice(0, MAX_JOBS_PER_REVIEW)
+  // Cheap rule before the expensive one, same reasoning/threshold as the
+  // manual-pull path (lib/agents/review-jobs.ts): don't spend an LLM call
+  // narrating a posting that only barely cleared MIN_MATCH_SCORE.
+  const commentaryThreshold = profile.autoDismissBelow ?? DEFAULT_COMMENTARY_THRESHOLD
+  const worthNarrating = toReview.filter((j) => (j.matchScore ?? 0) >= commentaryThreshold)
+  if (worthNarrating.length > 0 && deps.reviewer && profile.targetRoles.length > 0) {
+    const top = [...worthNarrating].sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0)).slice(0, MAX_JOBS_PER_REVIEW)
     try {
       const entries = await deps.reviewer(
         top.map((job) => buildReviewPayload(job, existing)),

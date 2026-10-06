@@ -7,6 +7,7 @@ import { useResume } from "@/lib/hooks/use-resume"
 import { useProfile } from "@/lib/hooks/use-profile"
 import { useApplications } from "@/lib/hooks/use-applications"
 import { useOutreach } from "@/lib/hooks/use-outreach"
+import { useErrorToast } from "@/lib/toast-context"
 import { createOutreach } from "@/lib/firestore/outreach"
 import { createCaseFileEntries } from "@/lib/firestore/case-file"
 import { draftOutreach } from "@/lib/agents/herald"
@@ -28,6 +29,7 @@ export default function OutreachPanel({ contact }: { contact: Contact }) {
   const { profile } = useProfile()
   const { applications } = useApplications()
   const { outreach } = useOutreach()
+  const notifyError = useErrorToast()
 
   const forContact = outreach
     .filter((o) => o.contactId === contact.id)
@@ -82,7 +84,9 @@ export default function OutreachPanel({ contact }: { contact: Contact }) {
       setRoleContext("")
       setPostingUrl("")
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't reach Herald right now.")
+      const message = err instanceof Error ? err.message : "Couldn't reach Herald right now."
+      setError(message)
+      notifyError(err, message)
     } finally {
       setDrafting(false)
     }

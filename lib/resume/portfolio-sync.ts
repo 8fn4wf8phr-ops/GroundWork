@@ -1,3 +1,4 @@
+import { fetchOrThrow } from "@/lib/fetch-friendly"
 import type { ProjectEntry } from "@/lib/types"
 
 // Spec §16 — "the site exposes a small public projects.json... the
@@ -19,7 +20,7 @@ function stableSourceId(entry: PortfolioProjectJson): string {
 
 export async function fetchPortfolioProjects(portfolioUrl: string): Promise<ProjectEntry[]> {
   const base = portfolioUrl.trim().replace(/\/+$/, "")
-  const res = await fetch(`${base}/projects.json`)
+  const res = await fetchOrThrow(`${base}/projects.json`, undefined, "your portfolio site")
   if (!res.ok) {
     throw new Error(`Portfolio site returned ${res.status} for projects.json`)
   }

@@ -1,5 +1,6 @@
 import type { DiscoveredJob } from "@/lib/discovery/types"
 import { stripHtml } from "@/lib/discovery/strip-html"
+import { fetchOrThrow } from "@/lib/fetch-friendly"
 
 // RemoteOK's public API — no key required, CORS-open (confirmed live).
 // Their terms require linking back and crediting RemoteOK as the source,
@@ -19,7 +20,7 @@ type RemoteOkPosting = {
 }
 
 export async function fetchRemoteOkJobs(): Promise<DiscoveredJob[]> {
-  const res = await fetch(REMOTEOK_ENDPOINT)
+  const res = await fetchOrThrow(REMOTEOK_ENDPOINT, undefined, "RemoteOK")
   if (!res.ok) {
     throw new Error(`RemoteOK API returned ${res.status}`)
   }

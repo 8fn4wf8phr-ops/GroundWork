@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context"
 import { useProfile } from "@/lib/hooks/use-profile"
 import { useResume } from "@/lib/hooks/use-resume"
 import { useOutreach } from "@/lib/hooks/use-outreach"
+import { useToast } from "@/lib/toast-context"
 import { deleteOutreach, updateOutreach } from "@/lib/firestore/outreach"
 import { createCaseFileEntries } from "@/lib/firestore/case-file"
 import { logStatusChange } from "@/lib/agents/ledger"
@@ -19,6 +20,7 @@ export default function OutreachDetailModal({ outreach, onClose }: { outreach: O
   const { profile } = useProfile()
   const { resume } = useResume()
   const { outreach: allOutreach } = useOutreach()
+  const { showToast } = useToast()
 
   const [subject, setSubject] = useState(outreach.subject)
   const [body, setBody] = useState(outreach.body)
@@ -122,6 +124,7 @@ export default function OutreachDetailModal({ outreach, onClose }: { outreach: O
       }
     } catch {
       setError("Couldn't save those changes. Please try again.")
+      showToast("Couldn't save those changes. Please try again.")
     } finally {
       setSaving(false)
     }
@@ -159,6 +162,7 @@ export default function OutreachDetailModal({ outreach, onClose }: { outreach: O
       onClose()
     } catch {
       setError("Couldn't delete this draft. Please try again.")
+      showToast("Couldn't delete this draft. Please try again.")
       setDeleting(false)
     }
   }

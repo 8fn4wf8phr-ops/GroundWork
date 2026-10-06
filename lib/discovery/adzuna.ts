@@ -1,6 +1,7 @@
 import { authHeader } from "@/lib/auth-header"
 import { fetchAdzunaJobsForProfile as fetchForProfile, type AdzunaSearch } from "@/lib/discovery/adzuna-map"
 import type { DiscoveredJob } from "@/lib/discovery/types"
+import { fetchOrThrow } from "@/lib/fetch-friendly"
 import type { Profile } from "@/lib/types"
 
 // Calls our own /api/discovery/adzuna route (server-side, holds the real
@@ -10,7 +11,7 @@ const searchViaProxy: AdzunaSearch = async (what, where) => {
   if (what) params.set("what", what)
   if (where) params.set("where", where)
 
-  const res = await fetch(`/api/discovery/adzuna?${params.toString()}`, { headers: await authHeader() })
+  const res = await fetchOrThrow(`/api/discovery/adzuna?${params.toString()}`, { headers: await authHeader() }, "Adzuna")
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.error ?? `Adzuna proxy returned ${res.status}`)

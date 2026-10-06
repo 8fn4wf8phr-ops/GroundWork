@@ -14,6 +14,21 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == request.resource.data.ownerId;
     }
 
+    // Guards update specifically: isOwner(resource.data.ownerId) alone only
+    // checks who owns the document BEFORE the write, not what the write
+    // changes ownerId TO. Confirmed live via a real ID token hitting the
+    // Firestore REST API directly: without this, an authenticated owner
+    // could PATCH their own job/application/contact/etc. and set its
+    // ownerId to a DIFFERENT uid, which — since every query in this app
+    // filters by ownerId == auth.uid — effectively plants an
+    // attacker-controlled document into another user's own Review queue,
+    // Applications board, Contacts, or Case File. Every ownerId-field
+    // collection below checks this on update so ownerId can never change
+    // after creation.
+    function ownerIdUnchanged() {
+      return request.resource.data.ownerId == resource.data.ownerId;
+    }
+
     // Profile documents are keyed by the owner's own uid (see
     // lib/firestore/profile.ts), so the path itself proves ownership —
     // unlike the collections below, this doesn't need to read
@@ -32,22 +47,26 @@ service cloud.firestore {
     }
 
     match /jobs/{jobId} {
-      allow read, update, delete: if isOwner(resource.data.ownerId);
+      allow read, delete: if isOwner(resource.data.ownerId);
+      allow update: if isOwner(resource.data.ownerId) && ownerIdUnchanged();
       allow create: if isOwnerOnCreate();
     }
 
     match /applications/{applicationId} {
-      allow read, update, delete: if isOwner(resource.data.ownerId);
+      allow read, delete: if isOwner(resource.data.ownerId);
+      allow update: if isOwner(resource.data.ownerId) && ownerIdUnchanged();
       allow create: if isOwnerOnCreate();
     }
 
     match /contacts/{contactId} {
-      allow read, update, delete: if isOwner(resource.data.ownerId);
+      allow read, delete: if isOwner(resource.data.ownerId);
+      allow update: if isOwner(resource.data.ownerId) && ownerIdUnchanged();
       allow create: if isOwnerOnCreate();
     }
 
     match /caseFileEntries/{entryId} {
-      allow read, update, delete: if isOwner(resource.data.ownerId);
+      allow read, delete: if isOwner(resource.data.ownerId);
+      allow update: if isOwner(resource.data.ownerId) && ownerIdUnchanged();
       allow create: if isOwnerOnCreate();
     }
 
@@ -57,14 +76,16 @@ service cloud.firestore {
     // random-id + query-by-ownerId pattern as jobs/applications/contacts
     // instead, which never touches a possibly-nonexistent specific doc.
     match /tailoredMaterials/{entryId} {
-      allow read, update, delete: if isOwner(resource.data.ownerId);
+      allow read, delete: if isOwner(resource.data.ownerId);
+      allow update: if isOwner(resource.data.ownerId) && ownerIdUnchanged();
       allow create: if isOwnerOnCreate();
     }
 
     // Same random-id + query-by-ownerId pattern as jobs/applications/
     // contacts/tailoredMaterials above (Herald outreach drafts).
     match /outreach/{outreachId} {
-      allow read, update, delete: if isOwner(resource.data.ownerId);
+      allow read, delete: if isOwner(resource.data.ownerId);
+      allow update: if isOwner(resource.data.ownerId) && ownerIdUnchanged();
       allow create: if isOwnerOnCreate();
     }
   }

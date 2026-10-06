@@ -1,5 +1,6 @@
 import type { DiscoveredJob } from "@/lib/discovery/types"
 import { stripHtml } from "@/lib/discovery/strip-html"
+import { fetchOrThrow } from "@/lib/fetch-friendly"
 import type { Profile } from "@/lib/types"
 
 // The Muse's public API — no key required, CORS-open (confirmed live).
@@ -33,7 +34,7 @@ export async function fetchThemuseJobs(profile: Profile): Promise<DiscoveredJob[
     params.set("location", "Remote")
   }
 
-  const res = await fetch(`${THEMUSE_ENDPOINT}?${params.toString()}`)
+  const res = await fetchOrThrow(`${THEMUSE_ENDPOINT}?${params.toString()}`, undefined, "The Muse")
   if (!res.ok) {
     throw new Error(`The Muse API returned ${res.status}`)
   }

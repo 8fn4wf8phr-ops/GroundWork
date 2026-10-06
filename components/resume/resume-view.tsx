@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { colors } from "@/lib/theme"
 import { useAuth } from "@/lib/auth-context"
 import { useResume } from "@/lib/hooks/use-resume"
+import { useToast } from "@/lib/toast-context"
 import { saveResume } from "@/lib/firestore/resume"
 import TagListInput from "@/components/profile/tag-list-input"
 import ExperienceEditor from "@/components/resume/experience-editor"
@@ -16,6 +17,7 @@ import type { CertificationEntry, EducationEntry, ExperienceEntry, ProjectEntry 
 export default function ResumeView() {
   const { user } = useAuth()
   const { resume, loading } = useResume()
+  const { showToast } = useToast()
 
   const [summary, setSummary] = useState("")
   const [experience, setExperience] = useState<ExperienceEntry[]>([])
@@ -59,7 +61,12 @@ export default function ResumeView() {
         `Synced ${fetched.length} project${fetched.length === 1 ? "" : "s"} from your portfolio — remember to save.`,
       )
     } catch (err) {
-      setSyncMessage(err instanceof Error ? `Couldn't sync: ${err.message}` : "Couldn't reach that portfolio site.")
+      // err.message is already a complete sentence (fetchOrThrow/a clean
+      // {error} body) — shown as-is rather than wrapped in another
+      // "Couldn't sync:" prefix.
+      const message = err instanceof Error ? err.message : "Couldn't reach that portfolio site."
+      setSyncMessage(message)
+      showToast(message)
     } finally {
       setSyncing(false)
     }
@@ -82,6 +89,7 @@ export default function ResumeView() {
       setSavedAt(Date.now())
     } catch {
       setError("Couldn't save your resume. Please try again.")
+      showToast("Couldn't save your resume. Please try again.")
     } finally {
       setSaving(false)
     }

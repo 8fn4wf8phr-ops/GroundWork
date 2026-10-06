@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod"
 import { z } from "zod"
+import * as Sentry from "@sentry/nextjs"
 
 // Shared plumbing for every /api/agents/* route. Each route used to
 // repeat the API-key check, client construction, model constant and
@@ -130,8 +131,13 @@ export function agentRoute<S extends z.ZodType>(
         return NextResponse.json({ error: err.message }, { status: err.status })
       }
       // Upstream/SDK error text can include request details — log it,
-      // but don't hand it back to the browser.
+      // but don't hand it back to the browser. This is the one error
+      // class Sentry's automatic instrumentation (instrumentation.ts)
+      // never sees on its own: it only catches errors that escape the
+      // route handler, and this one is deliberately caught and converted
+      // into a clean response instead of rethrown.
       console.error(`[agents] ${options.name} failed:`, err)
+      Sentry.captureException(err, { tags: { route: options.name } })
       return NextResponse.json({ error: `${options.name} failed. Please try again.` }, { status: 502 })
     }
   }

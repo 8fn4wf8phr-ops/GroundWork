@@ -5,6 +5,7 @@ import { colors } from "@/lib/theme"
 import { useAuth } from "@/lib/auth-context"
 import { useResume } from "@/lib/hooks/use-resume"
 import { useProfile } from "@/lib/hooks/use-profile"
+import { useErrorToast } from "@/lib/toast-context"
 import { getTailoredMaterials, saveTailoredMaterials, saveEditedCoverLetter } from "@/lib/firestore/tailored-materials"
 import { updateApplication } from "@/lib/firestore/applications"
 import { tailorForJob } from "@/lib/agents/tailor"
@@ -20,6 +21,7 @@ export default function TailorMaterialsModal({
   const { user } = useAuth()
   const { resume, loading: resumeLoading } = useResume()
   const { profile, loading: profileLoading } = useProfile()
+  const notifyError = useErrorToast()
 
   const [materials, setMaterials] = useState<TailoredMaterials | null>(null)
   const [loadingMaterials, setLoadingMaterials] = useState(true)
@@ -53,7 +55,9 @@ export default function TailorMaterialsModal({
         coverLetterUsed: `Tailored ${new Date().toISOString().slice(0, 10)}`,
       })
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't generate tailored materials. Please try again.")
+      const message = err instanceof Error ? err.message : "Couldn't generate tailored materials. Please try again."
+      setError(message)
+      notifyError(err, message)
     } finally {
       setGenerating(false)
     }

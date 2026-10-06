@@ -7,6 +7,7 @@ import { computeOverallStats, computeRatesByChannel, computeRatesBySource } from
 import { detectNotablePattern } from "@/lib/agents/pattern-signals"
 import { buildFollowUpReminderEmail, buildWeeklyDigestEmail } from "@/lib/email/templates"
 import { sendEmail } from "@/lib/email"
+import * as Sentry from "@sentry/nextjs"
 
 // Vercel Cron target (see vercel.json), same fail-closed CRON_SECRET
 // treatment as app/api/cron/discover. Runs the daily follow-up reminder
@@ -84,6 +85,7 @@ export async function GET(request: NextRequest) {
       }
       results.push(entry)
     } catch (err) {
+      Sentry.captureException(err, { tags: { route: "cron/notifications" } })
       results.push({ ...entry, error: err instanceof Error ? err.message : String(err) })
     }
   }

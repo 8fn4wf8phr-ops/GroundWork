@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context"
 import { useProfile } from "@/lib/hooks/use-profile"
 import { useResume } from "@/lib/hooks/use-resume"
 import { useReviewQueue } from "@/lib/hooks/use-review-queue"
+import { useErrorToast } from "@/lib/toast-context"
 import { fetchArbeitnowJobs } from "@/lib/discovery/arbeitnow"
 import { fetchAdzunaJobsForProfile } from "@/lib/discovery/adzuna"
 import { fetchRemoteOkJobs } from "@/lib/discovery/remoteok"
@@ -133,6 +134,7 @@ export default function ReviewQueueView() {
   const { profile } = useProfile()
   const { resume } = useResume()
   const { pending, loading } = useReviewQueue()
+  const notifyError = useErrorToast()
   const [selectedSource, setSelectedSource] = useState<SourceId>("arbeitnow")
   const [pulling, setPulling] = useState(false)
   const [pullMessage, setPullMessage] = useState<string | null>(null)
@@ -233,11 +235,14 @@ export default function ReviewQueueView() {
         }
       }
     } catch (err) {
-      setPullMessage(
-        err instanceof Error
-          ? `Couldn't pull from ${source.label}: ${err.message}`
-          : `Couldn't reach ${source.label} right now.`,
-      )
+      // err.message is already a complete, friendly sentence by this point
+      // (fetchOrThrow/postAgent — "Couldn't reach X — check your
+      // connection" or a clean {error} body), so it's shown as-is rather
+      // than wrapped in another "Couldn't pull from X:" that would just
+      // repeat the source name back.
+      const message = err instanceof Error ? err.message : `Couldn't reach ${source.label} right now.`
+      setPullMessage(message)
+      notifyError(err, message)
     } finally {
       setPulling(false)
     }

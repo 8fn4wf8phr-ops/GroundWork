@@ -1,6 +1,7 @@
 import { authHeader } from "@/lib/auth-header"
 import { fetchUsajobsForProfile as fetchForProfile, type UsajobsSearch } from "@/lib/discovery/usajobs-map"
 import type { DiscoveredJob } from "@/lib/discovery/types"
+import { fetchOrThrow } from "@/lib/fetch-friendly"
 import type { Profile } from "@/lib/types"
 
 // Calls our own /api/discovery/usajobs route (server-side, holds the
@@ -11,7 +12,7 @@ const searchViaProxy: UsajobsSearch = async (keyword, remoteOnly) => {
   if (keyword) params.set("keyword", keyword)
   if (remoteOnly) params.set("remoteOnly", "true")
 
-  const res = await fetch(`/api/discovery/usajobs?${params.toString()}`, { headers: await authHeader() })
+  const res = await fetchOrThrow(`/api/discovery/usajobs?${params.toString()}`, { headers: await authHeader() }, "USAJobs")
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.error ?? `USAJobs proxy returned ${res.status}`)

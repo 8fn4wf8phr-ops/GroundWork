@@ -1,14 +1,19 @@
 import { authHeader } from "@/lib/auth-header"
+import { fetchOrThrow } from "@/lib/fetch-friendly"
 
 // Browser-side call to an /api/agents/* route. The routes spend real
 // money on the server's Anthropic key, so each request carries the
 // signed-in user's Firebase ID token for the server to verify.
 export async function postAgent<T>(path: string, body: unknown, label: string): Promise<T> {
-  const res = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...(await authHeader()) },
-    body: JSON.stringify(body),
-  })
+  const res = await fetchOrThrow(
+    path,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(await authHeader()) },
+      body: JSON.stringify(body),
+    },
+    label,
+  )
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({}))
     throw new Error(errBody.error ?? `${label} returned ${res.status}`)

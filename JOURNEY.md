@@ -1226,6 +1226,139 @@ gone — see the incident note above for the other cleanup this surfaced.
 This was P3 off the 5-tier backlog (Section 28 was P1, Section 29 was
 P2); P4 (reliability) and P5 (portfolio) are still open.
 
+## 31. Reliability (P4 of the backlog)
+
+Fourth item off the same 5-tier user backlog as Sections 28-30. Three
+sub-items:
+
+**Real error messages instead of "Failed to fetch."** Root cause: every
+call site already handled a clean HTTP error response well (reads a real
+`{error}` body), but none of them handled `fetch()` itself throwing — a
+network-level failure (offline, DNS, CORS, a connection reset) surfaces
+from the browser as a bare `TypeError: Failed to fetch`, technically
+accurate and meaningless to read. New `lib/fetch-friendly.ts` wraps
+`fetch()` in exactly one place (`fetchOrThrow`) and converts that one
+failure class into `"Couldn't reach ${label} — check your connection and
+try again."` — applied to `lib/agents/client.ts`'s `postAgent` (every
+`/api/agents/*` call, app-wide, in one edit) and all 7
+`lib/discovery/*.ts` modules, plus `lib/resume/portfolio-sync.ts` (a
+user-supplied URL with no CORS guarantee — probably the single most
+likely place to actually hit this). Because every calling component
+already does `err instanceof Error ? err.message : fallback`, fixing the
+message at the source fixed every existing inline error display
+automatically, with zero changes needed in those components — confirmed
+by re-reading `tailor-materials-modal.tsx` (the exact flow that
+originally reported this bug, Section 24/25's "Failed to fetch" reports)
+and finding nothing left to change there.
+
+Surfaced two now-redundant messages this exposed: `review-queue-view.tsx`
+and `resume-view.tsx` were wrapping the error in their own
+`"Couldn't pull from X: ${err.message}"` / `"Couldn't sync: ${err.message}"`
+prefix, which — now that `err.message` is already a complete, friendly
+sentence — read as "Couldn't pull from Arbeitnow: Couldn't reach
+Arbeitnow — check your connection and try again." Simplified both to show
+`err.message` as-is.
+
+**A new toast layer**, not a UI-kit import — this project has none, and
+the need is narrow (a transient, action-triggered failure notice, not a
+persistent inline validation message). New `lib/toast-context.tsx`:
+`ToastProvider` (mounted once in `app/layout.tsx`, alongside the existing
+`AuthProvider`), `useToast()` for the raw `showToast(message)`, and
+`useErrorToast()` for the common `catch (err) { notify(err, fallback) }`
+shape. Auto-dismisses after 6 seconds or on a manual "Dismiss" click;
+positioned `bottom-20 sm:bottom-6` so it clears the mobile bottom tab bar
+from Section 29 rather than overlapping it. Wired into the highest-
+traffic write flows rather than a mechanical sweep of all ~46 existing
+catch blocks in the codebase: Review queue pull, Tailor materials
+generate, Herald draft, Profile save, Resume save/portfolio-sync, and
+Outreach save/delete. Left the many deliberately-silent "bonus layer"
+catches (Compass/Scout commentary, email sends, Herald's own follow-up
+auto-draft) exactly as they were — those are an intentional, documented
+design choice (a background agent failing shouldn't interrupt the
+primary action), not an oversight this task should reverse.
+
+**Error logging via Sentry** (`@sentry/nextjs`, newly installed) — same
+opt-in-when-configured pattern as every other integration in this project
+(Resend, the Anthropic key): `Sentry.init({ dsn: process.env.NEXT_PUBLIC_SENTRY_DSN })`
+across `sentry.server.config.ts`, `sentry.edge.config.ts`, and
+`instrumentation-client.ts` is a documented no-op with no DSN set, so
+nothing in this change requires the user to do anything before it's
+useful to them. `instrumentation.ts` registers the server/edge configs
+and exports `onRequestError` for Next's automatic request-error capture;
+`app/global-error.tsx` catches the one class of crash nothing else can
+(an error in the root layout itself). Explicitly added
+`Sentry.captureException` to three places that Next's *automatic*
+instrumentation can't see on its own, because each one deliberately
+catches its error and converts it into a clean response instead of
+re-throwing: `lib/server/agent-route.ts`'s catch-all (every
+`/api/agents/*` route's unexpected-failure branch — not the handled
+`AgentHttpError` branch, which is an intentional 400/503, not a bug), and
+both cron routes' per-item catch blocks. Skipped Session Replay (Sentry's
+own default suggestion) — this app handles real resumes, applications,
+and outreach contacts, and recording sessions adds a privacy surface
+nobody asked for.
+
+Real build-time gotcha, not obvious from Sentry's own docs: the
+installed version (`@sentry/nextjs@11.4.0`) moved `withSentryConfig` out
+of the package's main export into a separate `@sentry/nextjs/config`
+subpath — `next build` failed outright on the documented
+`import { withSentryConfig } from '@sentry/nextjs'` until this was
+discovered by inspecting the package's own `exports` map directly
+(`node -e "console.log(require('@sentry/nextjs/config'))"`) rather than
+trusting the general docs for the exact version actually installed.
+
+**Firestore rules: a real per-user-isolation gap, found and fixed.**
+Every ownerId-field collection's `allow update` only checked
+`isOwner(resource.data.ownerId)` — the document's owner *before* the
+write — never validating what the write changed `ownerId` *to*. Verified
+live, not just read off the page: minted two throwaway accounts, seeded a
+Job owned by one, and PATCHed it directly against the real Firestore REST
+API (a real ID token, not Admin — the same client-bound path the rules
+actually govern) to set `ownerId` to the other account's uid. It
+succeeded — 200, and the field really changed. Since every query in this
+app filters by `ownerId == auth.uid`, this meant an authenticated user
+could, via a hand-crafted request (never through the app's own UI, which
+never does this), plant an attacker-controlled document — a fake job
+posting, a fake case-file entry impersonating Compass, a fake Outreach
+record — directly into another user's own Review queue, Applications
+board, Contacts, or Case File. Fixed with a new `ownerIdUnchanged()` rule
+function (`request.resource.data.ownerId == resource.data.ownerId`),
+applied to `update` specifically (split out from the combined
+`read, update, delete` rule, since `delete` has no new data to compare)
+across all six affected collections (jobs, applications, contacts,
+caseFileEntries, tailoredMaterials, outreach). `profiles`/`resumes` were
+already safe from this specific issue — they're keyed by uid in the path
+itself, so access never depends on a mutable field a write could change.
+Confirmed no legitimate app code path ever sets `ownerId` in an
+`updateDoc`/`.update()` call (grepped the whole `lib/firestore/` tree),
+so this fix can't break anything real.
+
+Same manual-publish gap as every other `firestore.rules` change in this
+project (Section 26): editing the file in the repo does NOT change the
+live rules — **the user needs to republish via the Firebase console
+before this fix takes effect**, same as the Herald/Outreach rules
+republish. Not re-verified against live production after this session's
+edit, for the same reason: there was nothing live to verify against yet.
+A local Firestore emulator would have let this be tested in full
+isolation before publishing, but this project has no `firebase-tools`
+installed and has never used the emulator — installing it was judged out
+of scope for one rules check, given high confidence in the fix from a
+well-established, standard Firestore rules idiom (pinning a field across
+a write) already proven syntactically valid elsewhere in this exact file.
+
+All verified live except the rules fix (pending republish, as above):
+`tsc --noEmit` and `next build` both clean; the friendly-error fix
+confirmed by routing an Arbeitnow fetch through a real blocked network
+request (Playwright's request interception, not full offline mode, so
+the already-open Firebase/Firestore sockets stayed alive) and reading
+back both the inline message and the toast — both showed the clean
+sentence, and the raw string "Failed to fetch" was confirmed absent from
+the page entirely; the toast's mobile positioning screenshotted at 375px
+showing it clear of the bottom tab bar with no horizontal overflow.
+
+This was P4 off the 5-tier backlog (Sections 28-30 were P1-P3); P5
+(portfolio) is the last one open.
+
 ## What this leaves for next time
 
 - The browser extension (spec-mentioned, not started).

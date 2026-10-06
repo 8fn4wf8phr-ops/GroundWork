@@ -5,6 +5,7 @@ import { colors } from "@/lib/theme"
 import { useAuth } from "@/lib/auth-context"
 import { useProfile } from "@/lib/hooks/use-profile"
 import { useResume } from "@/lib/hooks/use-resume"
+import { useToast } from "@/lib/toast-context"
 import { saveProfile } from "@/lib/firestore/profile"
 import { createCaseFileEntries } from "@/lib/firestore/case-file"
 import { detectSageSignal } from "@/lib/agents/sage-signals"
@@ -18,6 +19,7 @@ export default function ProfileView() {
   const { user } = useAuth()
   const { profile, loading } = useProfile()
   const { resume } = useResume()
+  const { showToast } = useToast()
   const [checkingIn, setCheckingIn] = useState(false)
   const [sageMessage, setSageMessage] = useState<string | null>(null)
 
@@ -81,6 +83,7 @@ export default function ProfileView() {
       setSavedAt(Date.now())
     } catch {
       setError("Couldn't save your profile. Please try again.")
+      showToast("Couldn't save your profile. Please try again.")
     } finally {
       setSaving(false)
     }

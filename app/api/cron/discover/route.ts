@@ -19,6 +19,7 @@ import { archiveStaleAndDeadJobs } from "@/lib/server/archive-stale-jobs"
 import { sendEmail } from "@/lib/email"
 import { buildNewMatchEmail } from "@/lib/email/templates"
 import { secretMatches } from "@/lib/server/cron-auth"
+import * as Sentry from "@sentry/nextjs"
 
 // Vercel Cron target (see vercel.json). Vercel calls it with
 // `Authorization: Bearer $CRON_SECRET`; anything else is refused, and an
@@ -90,12 +91,14 @@ export async function GET(request: NextRequest) {
       archive = await archiveStaleAndDeadJobs(db, new Date())
     } catch (err) {
       console.error("[cron] archive sweep failed:", err)
+      Sentry.captureException(err, { tags: { route: "cron/discover", step: "archive" } })
       archive = { error: err instanceof Error ? err.message : String(err) }
     }
 
     return NextResponse.json({ ...result, archive })
   } catch (err) {
     console.error("[cron] scheduled discovery failed:", err)
+    Sentry.captureException(err, { tags: { route: "cron/discover" } })
     return NextResponse.json({ error: "Scheduled discovery failed." }, { status: 500 })
   }
 }

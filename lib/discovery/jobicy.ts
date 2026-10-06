@@ -1,6 +1,7 @@
 import type { DiscoveredJob } from "@/lib/discovery/types"
 import type { Profile } from "@/lib/types"
 import { stripHtml } from "@/lib/discovery/strip-html"
+import { fetchOrThrow } from "@/lib/fetch-friendly"
 
 // Jobicy's public API — no key required, CORS-open (confirmed live).
 // Unlike Arbeitnow, its `tag` param genuinely filters server-side and
@@ -22,7 +23,7 @@ async function fetchJobicyJobs(tag: string): Promise<DiscoveredJob[]> {
   const params = new URLSearchParams({ count: "50" })
   if (tag) params.set("tag", tag)
 
-  const res = await fetch(`${JOBICY_ENDPOINT}?${params.toString()}`)
+  const res = await fetchOrThrow(`${JOBICY_ENDPOINT}?${params.toString()}`, undefined, "Jobicy")
   if (!res.ok) {
     throw new Error(`Jobicy API returned ${res.status}`)
   }

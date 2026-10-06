@@ -38,8 +38,11 @@ Resume storage, resume/cover-letter tailoring, cold-outreach drafting
 (see [Outreach](#outreach-herald--ledger) below), follow-up reminders,
 referral/channel Analytics, portfolio project sync, email
 notifications (see [Email notifications](#email-notifications-opt-in)
-below), and a mobile layout (bottom tab bar below 640px, no horizontal
-scroll on any view) — see JOURNEY.md §29.
+below), a mobile layout (bottom tab bar below 640px, no horizontal
+scroll on any view) — see JOURNEY.md §29 — and reliability basics: real
+error messages (a toast, never a raw "Failed to fetch"), optional Sentry
+error logging, and a per-user Firestore isolation fix — see
+[Reliability](#reliability) below.
 
 **Not started:** the browser extension.
 
@@ -207,7 +210,7 @@ separate notification type.
 
 ## Review queue extras
 
-**Keyboard shortcuts**, active whenever a card isn't a field has focus:
+**Keyboard shortcuts**, active whenever a field doesn't have focus:
 `J`/`K` move the highlighted card, `P` pursues it, `D` dismisses it (with
 a 6-second "Undo" toast). **Auto-archive** quietly files away postings
 that sit unreviewed for 3+ weeks, or whose own posting link now returns a
@@ -231,6 +234,31 @@ existing Firebase project, you need to **republish `firestore.rules`**
 (Firestore console → Rules tab) — Firestore defaults to locked, and this
 file isn't deployed automatically (confirmed live: the client SDK gets a
 real `PERMISSION_DENIED` on `outreach` until you do).
+
+## Reliability
+
+A failed API call shows a real, specific message — as a toast (bottom of
+the screen, auto-dismisses after 6 seconds) and usually inline too — never
+a raw, meaningless `Failed to fetch`. `lib/fetch-friendly.ts` is the one
+place this is fixed, wrapping every outbound `fetch()` call (every
+`/api/agents/*` call, all 7 discovery sources, portfolio sync).
+
+**Error logging is opt-in**, via [Sentry](https://sentry.io) —
+`NEXT_PUBLIC_SENTRY_DSN` (free account, no setup beyond pasting the DSN).
+Unset means no error reporting at all, same skip-if-unset pattern as
+every other integration here. `SENTRY_ORG`/`SENTRY_PROJECT`/`SENTRY_AUTH_TOKEN`
+are optional on top of that, and only affect whether a Sentry stack trace
+shows your real source lines instead of minified output.
+
+**Firestore rules got a real per-user-isolation fix**: `allow update` on
+every ownerId-scoped collection now also checks that the write can't
+change `ownerId` to a different uid — without it, a user could (never
+through the app's own UI, but via a hand-crafted request using their own
+valid credentials) plant a document into another user's own data, since
+every query here filters by `ownerId == auth.uid`. See JOURNEY.md §31 for
+how this was found and verified. **If you have an existing Firebase
+project from before this fix, republish `firestore.rules`** the same way
+as the Outreach collection above — this one doesn't auto-deploy either.
 
 ## Project structure
 

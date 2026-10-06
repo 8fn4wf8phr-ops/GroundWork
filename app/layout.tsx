@@ -2,6 +2,7 @@ import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import { Space_Grotesk, Inter } from 'next/font/google'
 import { AuthProvider } from '@/lib/auth-context'
+import { ToastProvider } from '@/lib/toast-context'
 import './globals.css'
 
 const spaceGrotesk = Space_Grotesk({
@@ -55,7 +56,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`antialiased ${spaceGrotesk.variable} ${inter.variable}`}>
-        <AuthProvider>{children}</AuthProvider>
+        <ToastProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </ToastProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

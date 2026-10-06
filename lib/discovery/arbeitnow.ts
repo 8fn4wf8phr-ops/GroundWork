@@ -1,5 +1,6 @@
 import type { DiscoveredJob } from "@/lib/discovery/types"
 import { stripHtml } from "@/lib/discovery/strip-html"
+import { fetchOrThrow } from "@/lib/fetch-friendly"
 
 // Arbeitnow's public job board API — no key required, CORS-open
 // (access-control-allow-origin: *, confirmed live), documented at
@@ -22,7 +23,7 @@ type ArbeitnowPosting = {
 }
 
 export async function fetchArbeitnowJobs(): Promise<DiscoveredJob[]> {
-  const res = await fetch(ARBEITNOW_ENDPOINT)
+  const res = await fetchOrThrow(ARBEITNOW_ENDPOINT, undefined, "Arbeitnow")
   if (!res.ok) {
     throw new Error(`Arbeitnow API returned ${res.status}`)
   }

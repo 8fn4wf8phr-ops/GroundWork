@@ -47,7 +47,7 @@ export function useReviewQueue() {
   const pending = useMemo(() => {
     const appliedJobIds = new Set(applications.map((a) => a.jobId))
     return jobs
-      .filter((j) => j.reviewStatus !== "dismissed" && !appliedJobIds.has(j.id))
+      .filter((j) => j.reviewStatus !== "dismissed" && j.reviewStatus !== "archived" && !appliedJobIds.has(j.id))
       .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0))
   }, [jobs, applications])
 

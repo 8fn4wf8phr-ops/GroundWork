@@ -77,6 +77,13 @@ export async function dismissJob(jobId: string) {
   await updateDoc(doc(db, "jobs", jobId), { reviewStatus: "dismissed" })
 }
 
+// Powers the Review queue's "Undo" toast after a single dismiss (keyboard
+// shortcut or button) — not offered for the bulk sweep above, which asks
+// for an explicit confirmation up front instead.
+export async function undismissJob(jobId: string) {
+  await updateDoc(doc(db, "jobs", jobId), { reviewStatus: "pending" })
+}
+
 // Firestore's write-batch limit is 500 operations; chunked the same way
 // admin-store.ts chunks scheduled-discovery saves, for the same reason —
 // a big enough "Dismiss lowest match %" sweep could exceed one batch.

@@ -15,6 +15,7 @@ import { createAdminStore } from "@/lib/server/admin-store"
 import { reviewJobs } from "@/lib/server/review-jobs"
 import { summarizeDismissal } from "@/lib/server/dismiss-summary"
 import { runScheduledDiscovery } from "@/lib/server/scheduled-discovery"
+import { archiveStaleAndDeadJobs } from "@/lib/server/archive-stale-jobs"
 import { sendEmail } from "@/lib/email"
 import { buildNewMatchEmail } from "@/lib/email/templates"
 import { secretMatches } from "@/lib/server/cron-auth"
@@ -79,7 +80,20 @@ export async function GET(request: NextRequest) {
       // ?force=1 skips the once-per-20h guard, for manual testing only.
       { force: request.nextUrl.searchParams.get("force") === "1" },
     )
-    return NextResponse.json(result)
+
+    // Queue hygiene: independent of the per-user opt-in above, runs across
+    // every owner's jobs regardless of whether they use daily auto-pull.
+    // Best-effort — a failure here never hides that discovery itself
+    // succeeded.
+    let archive
+    try {
+      archive = await archiveStaleAndDeadJobs(db, new Date())
+    } catch (err) {
+      console.error("[cron] archive sweep failed:", err)
+      archive = { error: err instanceof Error ? err.message : String(err) }
+    }
+
+    return NextResponse.json({ ...result, archive })
   } catch (err) {
     console.error("[cron] scheduled discovery failed:", err)
     return NextResponse.json({ error: "Scheduled discovery failed." }, { status: 500 })

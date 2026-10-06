@@ -4,10 +4,12 @@ import { useState } from "react"
 import { colors } from "@/lib/theme"
 import { useAuth } from "@/lib/auth-context"
 import { useProfile } from "@/lib/hooks/use-profile"
+import { useResume } from "@/lib/hooks/use-resume"
 import { useOutreach } from "@/lib/hooks/use-outreach"
 import { deleteOutreach, updateOutreach } from "@/lib/firestore/outreach"
 import { createCaseFileEntries } from "@/lib/firestore/case-file"
 import { logStatusChange } from "@/lib/agents/ledger"
+import { draftOutreach } from "@/lib/agents/herald"
 import { OUTREACH_STATUSES, type Outreach, type OutreachStatus } from "@/lib/types"
 
 const DEFAULT_DAILY_CAP = 10
@@ -15,14 +17,23 @@ const DEFAULT_DAILY_CAP = 10
 export default function OutreachDetailModal({ outreach, onClose }: { outreach: Outreach; onClose: () => void }) {
   const { user } = useAuth()
   const { profile } = useProfile()
+  const { resume } = useResume()
   const { outreach: allOutreach } = useOutreach()
 
   const [subject, setSubject] = useState(outreach.subject)
   const [body, setBody] = useState(outreach.body)
+  // Mirror subject/body's local-state pattern rather than reading
+  // outreach.warnings/projectsReferenced directly — needed now that the
+  // follow-up auto-draft below (persist()) can update them after the
+  // modal has already mounted, and the "Check before sending" box needs
+  // to reflect that, not the stale props from when the modal opened.
+  const [warnings, setWarnings] = useState(outreach.warnings ?? [])
+  const [projectsReferenced, setProjectsReferenced] = useState(outreach.projectsReferenced)
   const [status, setStatus] = useState<OutreachStatus>(outreach.status)
   const [followUpDate, setFollowUpDate] = useState(outreach.followUpDate ?? "")
   const [notes, setNotes] = useState(outreach.notes ?? "")
   const [saving, setSaving] = useState(false)
+  const [draftingFollowUp, setDraftingFollowUp] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copiedWhat, setCopiedWhat] = useState<string | null>(null)
   const [confirmOverCap, setConfirmOverCap] = useState(false)
@@ -50,6 +61,7 @@ export default function OutreachDetailModal({ outreach, onClose }: { outreach: O
     const oldStatus = outreach.status
     try {
       const movingToSent = oldStatus !== "Sent" && nextStatus === "Sent"
+      const movingToFollowUpDue = oldStatus !== "Follow-up due" && nextStatus === "Follow-up due"
       await updateOutreach(outreach.id, {
         subject,
         body,
@@ -73,6 +85,41 @@ export default function OutreachDetailModal({ outreach, onClose }: { outreach: O
       }
       setStatus(nextStatus)
       setConfirmOverCap(false)
+
+      // Herald drafts the second touch automatically so the next action on
+      // a stalled outreach is "review and approve," not "start from a
+      // blank subject line." Best-effort, same bonus-layer reasoning as
+      // the Ledger log above: the status change already succeeded, so a
+      // Herald failure here is just a missed convenience, never rolled back.
+      if (movingToFollowUpDue && resume && profile) {
+        setDraftingFollowUp(true)
+        try {
+          const firstTouchAt = outreach.sentAt ?? outreach.createdAt
+          const daysSinceFirstTouch = Math.max(0, Math.round((Date.now() - new Date(firstTouchAt).getTime()) / 86_400_000))
+          const result = await draftOutreach(resume, profile.targetRoles, {
+            company: outreach.company,
+            contactName: outreach.contactName,
+            contactEmail: outreach.contactEmail,
+            roleContext: outreach.roleContext,
+            followUp: { daysSinceFirstTouch },
+          })
+          await updateOutreach(outreach.id, {
+            subject: result.subject,
+            body: result.body,
+            projectsReferenced: result.projectsReferenced,
+            warnings: result.warnings,
+          })
+          setSubject(result.subject)
+          setBody(result.body)
+          setProjectsReferenced(result.projectsReferenced)
+          setWarnings(result.warnings)
+          if (user) await createCaseFileEntries(user.uid, [{ agent: "Herald", message: result.caseFileNote, outreachId: outreach.id }])
+        } catch {
+          // ignore — see comment above
+        } finally {
+          setDraftingFollowUp(false)
+        }
+      }
     } catch {
       setError("Couldn't save those changes. Please try again.")
     } finally {
@@ -88,6 +135,20 @@ export default function OutreachDetailModal({ outreach, onClose }: { outreach: O
       return
     }
     await copy(body, "body")
+    await persist("Sent")
+  }
+
+  // mailto: needs no OAuth or Graph API call — the OS's default mail
+  // handler (Outlook, if that's what's configured) opens with these
+  // fields prefilled. Gated the same way as "Approve & copy": both
+  // represent "I'm sending this now," so both respect the soft daily cap.
+  const openInOutlook = async () => {
+    if (wouldExceedCap && !confirmOverCap) {
+      setConfirmOverCap(true)
+      return
+    }
+    const mailto = `mailto:${encodeURIComponent(outreach.contactEmail ?? "")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    window.location.href = mailto
     await persist("Sent")
   }
 
@@ -125,19 +186,25 @@ export default function OutreachDetailModal({ outreach, onClose }: { outreach: O
         </div>
 
         <div className="flex flex-col gap-3.5">
-          {outreach.projectsReferenced.length > 0 && (
-            <p className="text-xs" style={{ color: colors.muted }}>
-              References: {outreach.projectsReferenced.join(", ")}
+          {draftingFollowUp && (
+            <p className="text-sm" style={{ color: colors.teal }}>
+              Herald is drafting a follow-up…
             </p>
           )}
 
-          {outreach.warnings && outreach.warnings.length > 0 && (
+          {projectsReferenced.length > 0 && (
+            <p className="text-xs" style={{ color: colors.muted }}>
+              References: {projectsReferenced.join(", ")}
+            </p>
+          )}
+
+          {warnings.length > 0 && (
             <div className="rounded-lg border px-3 py-2" style={{ borderColor: colors.amber }}>
               <span className="text-xs font-medium uppercase tracking-wide" style={{ color: colors.amber }}>
                 Check before sending
               </span>
               <ul className="mt-1 flex flex-col gap-1 text-sm" style={{ color: colors.text }}>
-                {outreach.warnings.map((w, i) => (
+                {warnings.map((w, i) => (
                   <li key={i}>{w}</li>
                 ))}
               </ul>
@@ -255,7 +322,7 @@ export default function OutreachDetailModal({ outreach, onClose }: { outreach: O
               </button>
             )}
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={save}
@@ -264,6 +331,15 @@ export default function OutreachDetailModal({ outreach, onClose }: { outreach: O
                 style={{ borderColor: colors.border, color: colors.text }}
               >
                 {saving ? "Saving…" : "Save changes"}
+              </button>
+              <button
+                type="button"
+                onClick={openInOutlook}
+                disabled={saving}
+                className="rounded-lg border px-3 py-2 text-sm font-medium transition-colors hover:opacity-90 disabled:opacity-50"
+                style={{ borderColor: colors.border, color: colors.text }}
+              >
+                Open in Outlook
               </button>
               <button
                 type="button"
@@ -278,8 +354,10 @@ export default function OutreachDetailModal({ outreach, onClose }: { outreach: O
           </div>
 
           <p className="text-xs" style={{ color: colors.muted }}>
-            Herald never sends anything — "Approve & copy" copies the body to your clipboard and marks this Sent, for
-            you to paste into Outlook yourself. (A direct Outlook send via Microsoft Graph is a planned fast-follow,
+            Herald never sends anything — "Approve & copy" copies the body to your clipboard, or "Open in Outlook"
+            opens a prefilled email via your system's mail handler (a plain mailto: link, no Microsoft Graph OAuth
+            needed) — either way marks this Sent, for you to review and send yourself. (A direct, in-app Outlook
+            send via Microsoft Graph is still a possible fast-follow,
             not built yet.)
           </p>
         </div>

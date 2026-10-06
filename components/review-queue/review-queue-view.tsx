@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { colors } from "@/lib/theme"
 import { useAuth } from "@/lib/auth-context"
 import { useProfile } from "@/lib/hooks/use-profile"
@@ -13,7 +13,7 @@ import { fetchJobicyJobsForProfile } from "@/lib/discovery/jobicy"
 import { fetchThemuseJobs } from "@/lib/discovery/themuse"
 import { fetchUsajobsForProfile } from "@/lib/discovery/usajobs"
 import { fetchWeWorkRemotelyJobs } from "@/lib/discovery/wwr"
-import { saveDiscoveredJobs, dismissJob, dismissJobs } from "@/lib/firestore/jobs"
+import { saveDiscoveredJobs, dismissJob, dismissJobs, undismissJob } from "@/lib/firestore/jobs"
 import { createApplicationFromJob } from "@/lib/firestore/applications"
 import { createCaseFileEntries } from "@/lib/firestore/case-file"
 import { reviewTopNewJobs } from "@/lib/agents/review-jobs"
@@ -52,14 +52,19 @@ function QueueCard({
   onPursue,
   onDismiss,
   busy,
+  focused,
 }: {
   job: Job
   onPursue: () => void
   onDismiss: () => void
   busy: boolean
+  focused: boolean
 }) {
   return (
-    <div className="rounded-lg border p-4" style={{ backgroundColor: colors.card, borderColor: colors.border }}>
+    <div
+      className="rounded-lg border p-4 transition-colors"
+      style={{ backgroundColor: colors.card, borderColor: focused ? colors.teal : colors.border }}
+    >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold" style={{ color: colors.text }}>
@@ -135,6 +140,24 @@ export default function ReviewQueueView() {
   const [dismissThreshold, setDismissThreshold] = useState("50")
   const [confirmingSweep, setConfirmingSweep] = useState(false)
   const [sweeping, setSweeping] = useState(false)
+  const [focusedIndex, setFocusedIndex] = useState(0)
+  const [lastDismissed, setLastDismissed] = useState<Job | null>(null)
+  const [undoing, setUndoing] = useState(false)
+
+  // Clamp whenever the list reshapes (a pull adds cards, a dismiss removes
+  // one) so J/K/P/D always act on a real row instead of a stale index.
+  useEffect(() => {
+    setFocusedIndex((i) => Math.min(i, Math.max(0, pending.length - 1)))
+  }, [pending.length])
+
+  // Auto-clears the "Dismissed — Undo" toast a few seconds after the dismiss
+  // it refers to — long enough to catch a misfire, short enough not to
+  // become a stale leftover message once the user's moved on.
+  useEffect(() => {
+    if (!lastDismissed) return
+    const t = setTimeout(() => setLastDismissed(null), 6000)
+    return () => clearTimeout(t)
+  }, [lastDismissed])
 
   // Shared by the manual "Dismiss lowest match %" sweep and the opt-in
   // auto-dismiss-during-a-pull path below — one Compass case-file note per
@@ -230,14 +253,64 @@ export default function ReviewQueueView() {
     }
   }
 
-  const dismiss = async (jobId: string) => {
-    setBusyJobId(jobId)
+  const dismiss = async (job: Job) => {
+    setBusyJobId(job.id)
     try {
-      await dismissJob(jobId)
+      await dismissJob(job.id)
+      setLastDismissed(job)
     } finally {
       setBusyJobId(null)
     }
   }
+
+  const undoDismiss = async () => {
+    if (!lastDismissed) return
+    setUndoing(true)
+    try {
+      await undismissJob(lastDismissed.id)
+      setLastDismissed(null)
+    } finally {
+      setUndoing(false)
+    }
+  }
+
+  // Keyboard shortcuts: P pursue, D dismiss, J/K move focus down/up — all
+  // scoped to whichever card is "focused" (highlighted with a teal
+  // border), not the mouse. Ignored while typing in a field (the dismiss-
+  // threshold input, if it's ever focused) or with a modifier held, so
+  // browser/OS shortcuts (Cmd+P print, etc.) aren't hijacked.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      if (pending.length === 0) return
+
+      switch (e.key.toLowerCase()) {
+        case "j":
+          e.preventDefault()
+          setFocusedIndex((i) => Math.min(i + 1, pending.length - 1))
+          break
+        case "k":
+          e.preventDefault()
+          setFocusedIndex((i) => Math.max(i - 1, 0))
+          break
+        case "p": {
+          const job = pending[focusedIndex]
+          if (job && busyJobId == null) pursue(job.id)
+          break
+        }
+        case "d": {
+          const job = pending[focusedIndex]
+          if (job && busyJobId == null) dismiss(job)
+          break
+        }
+      }
+    }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending, focusedIndex, busyJobId])
 
   const threshold = Number(dismissThreshold) || 0
   const belowThreshold = pending.filter((j) => (j.matchScore ?? 0) < threshold)
@@ -364,6 +437,30 @@ export default function ReviewQueueView() {
         </p>
       )}
 
+      {lastDismissed && (
+        <div
+          className="mb-4 flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm"
+          style={{ borderColor: colors.border }}
+        >
+          <span style={{ color: colors.muted }}>Dismissed &quot;{lastDismissed.title}&quot;.</span>
+          <button
+            type="button"
+            disabled={undoing}
+            onClick={undoDismiss}
+            className="font-medium underline underline-offset-2 disabled:opacity-60"
+            style={{ color: colors.teal }}
+          >
+            {undoing ? "Undoing…" : "Undo"}
+          </button>
+        </div>
+      )}
+
+      {pending.length > 0 && (
+        <p className="mb-3 text-xs" style={{ color: colors.muted }}>
+          Keyboard: J/K to move, P to pursue, D to dismiss the highlighted card.
+        </p>
+      )}
+
       {profile && profile.targetRoles.length === 0 && (
         <p className="mb-4 text-sm" style={{ color: colors.amber }}>
           Add target roles in your Profile to get real match scores — everything will score low without them.
@@ -383,14 +480,16 @@ export default function ReviewQueueView() {
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {pending.map((job) => (
-            <QueueCard
-              key={job.id}
-              job={job}
-              busy={busyJobId === job.id}
-              onPursue={() => pursue(job.id)}
-              onDismiss={() => dismiss(job.id)}
-            />
+          {pending.map((job, i) => (
+            <div key={job.id} onClick={() => setFocusedIndex(i)}>
+              <QueueCard
+                job={job}
+                busy={busyJobId === job.id}
+                focused={i === focusedIndex}
+                onPursue={() => pursue(job.id)}
+                onDismiss={() => dismiss(job)}
+              />
+            </div>
           ))}
         </div>
       )}

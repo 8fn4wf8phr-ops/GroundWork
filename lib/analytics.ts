@@ -140,7 +140,14 @@ export function computePursueRatesBySource(jobs: Job[], applications: Applicatio
   const rows: SourceFunnelGroup[] = []
   for (const [key, list] of groups) {
     const pursued = list.filter((j) => pursuedJobIds.has(j.id)).length
-    const dismissed = list.filter((j) => j.reviewStatus === "dismissed" && !pursuedJobIds.has(j.id)).length
+    // Counted together: a user-dismissed posting and a system-archived one
+    // (lib/server/archive-stale-jobs.ts — sat too long, or its link 404s)
+    // both mean "this never turned into an Application," which is exactly
+    // what this funnel is measuring. Still a single "dismissed" bucket in
+    // the UI rather than a confusing third category.
+    const dismissed = list.filter(
+      (j) => (j.reviewStatus === "dismissed" || j.reviewStatus === "archived") && !pursuedJobIds.has(j.id),
+    ).length
     const decided = pursued + dismissed
     rows.push({
       key,

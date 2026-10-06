@@ -1086,6 +1086,146 @@ afterward. `tsc --noEmit` and `next build` both clean.
 This was P2 off the 5-tier backlog (Section 28 was P1); P3 (Herald/
 workflow), P4 (reliability), and P5 (portfolio) are still open.
 
+## 30. Workflow and Herald (P3 of the backlog)
+
+Third item off the same 5-tier user backlog as Sections 28-29. Five
+sub-items, split across the Review queue and Herald/Outreach:
+
+**Review queue keyboard shortcuts + undo.** `review-queue-view.tsx` now
+tracks a `focusedIndex` (highlighted with a teal border, same visual
+language as everywhere else active state is shown) and a `window`
+keydown listener: J/K move focus, P pursues, D dismisses the focused
+card. Ignored while a field has focus (checks `e.target.tagName`) or a
+modifier key is held, so this can't hijack browser/OS shortcuts. Dismiss
+(button or `D`) now shows a "Dismissed '{title}' — Undo" toast for 6
+seconds; a new `undismissJob()` (lib/firestore/jobs.ts, the mirror image
+of the existing `dismissJob()`) flips `reviewStatus` back to `"pending"`.
+Not offered on the bulk "Dismiss lowest match %" sweep, which already
+asks for an explicit confirmation up front.
+
+**Auto-archive: stale age + dead links.** New `reviewStatus` value,
+`"archived"` — distinct from the user-chosen `"dismissed"` so a system
+cleanup action is never conflated with a human decision (`lib/types.ts`,
+`use-review-queue.ts`'s pending filter, and `computePursueRatesBySource`'s
+"dismissed" bucket all updated to treat the two as the same "never became
+an Application" signal for their own purposes while keeping them separate
+in storage). New `lib/server/archive-stale-jobs.ts`, run once per day
+inside the existing `/api/cron/discover` invocation — NOT a third Vercel
+Cron job, this project deliberately stays at 2 (see Section 25) — across
+every owner's jobs in one query, independent of whether that owner opted
+into daily auto-pull (hygiene shouldn't depend on an unrelated opt-in).
+Two rules:
+- Sat pending 21+ days → archived outright.
+- 3-21 days old, has a postingUrl, among the oldest such candidates (capped
+  at 25/run) → HEAD-checked; archived ONLY on an explicit 404/410. A
+  timeout, network error, 403 (anti-bot protection), or any other status
+  is left alone — a false "archived" would silently hide a real
+  opportunity with no way to notice, while a missed dead link just gets
+  caught by the age rule eventually anyway.
+
+Real query-design decision: the obvious Firestore query
+(`where("reviewStatus","==","pending").where("dateDiscovered","<=",cutoff)`)
+needs a composite index. Rather than depend on one existing (same class of
+manual Firebase-console gotcha as Section 26's rules-republish, and this
+project doesn't use Firebase CLI tooling to manage indexes), it reads the
+single-field `reviewStatus == "pending"` query instead (no composite index
+needed, ever) and does every date comparison in memory — ISO strings
+compare correctly with plain `<=`, the same trick `lib/notifications/follow-ups.ts`
+already relies on. Dead-link HEAD checks run via `Promise.all`, not a
+sequential loop — this executes inside the same `maxDuration=60` route as
+daily discovery, so up to 25 sequential 6-second timeouts would risk
+exactly the truncation failure already hit twice before (Sections 24, 26).
+
+**A real incident during testing, caught and fixed:** the first live test
+of `archiveStaleAndDeadJobs` queried and mutated real Firestore data —
+by design, this function has no ownerId filter (it's meant to run across
+every owner), but running it against the live shared project during
+*testing*, before the feature was ever reviewed, archived 9 postings
+belonging to *other* accounts outside the one seeded for the test. Those
+turned out to all be leftover `groundwork-test-*` throwaway accounts from
+sessions as far back as 2026-09-20/21 that earlier JOURNEY entries had
+recorded as "deleted and confirmed gone" — they weren't. Investigated via
+Firebase Auth's user list before doing anything else: confirmed the real
+account (monroe.juwan@outlook.com) had zero archived jobs and was never
+touched. Deleted all 13 leftover accounts and their 346 orphaned documents
+across every collection (profiles/resumes/jobs/applications/contacts/outreach/caseFileEntries),
+verified only the real account's data remains anywhere in the project.
+Re-verified the archive logic itself afterward using a fully isolated
+fake Firestore (a ~30-line mock of just `collection().where().get()` and
+`batch()`, fed synthetic docs) plus a local HTTP server for the dead-link
+checks (a public test service, httpstat.us, turned out to be too slow —
+9-10s per response — to even exercise the code path within its own 6s
+timeout, which is itself a correct-behavior confirmation: the timeout
+path correctly refused to archive on an inconclusive signal). Lesson,
+recorded for real this time: a cross-account query is exactly the kind of
+thing that needs a fully offline test double, not "a throwaway account
+plus trust that nothing else is in the way" — the database doesn't know
+which rows are "mine."
+
+**Herald: "Open in Outlook."** A plain `mailto:` link (RFC 6068 — no
+Microsoft Graph OAuth needed) built from the current subject/body/contact
+email, gated by the same soft-daily-cap confirmation and `persist("Sent")`
+call as the existing "Approve & copy," so both buttons represent the same
+underlying action ("I'm sending this") with a different final step.
+Verified the Firestore side (status correctly moves to `"Sent"`,
+pre-existing `sentAt` correctly preserved) — the actual OS mail-handoff
+itself isn't observable in headless browser automation (there's no mail
+client to hand off to), which is an environment limitation, not an app
+bug: Chromium silently no-ops a `mailto:` navigation with nothing
+registered to handle it.
+
+**Herald: fewer false-positive "check before sending" flags.** The shared
+`findUnsupportedFigures`/`extractFigures` (`lib/agents/tailor-resolve.ts`,
+used by both Herald and Quill) was flagging scheduling logistics like
+"15-minute call" as an unverified claim, alongside real factual numbers —
+it had no way to tell "a number Herald invented about the candidate" from
+"a number Herald is allowed to write by its own system prompt" (asking
+for a short call is explicitly part of Herald's instructions). Fixed by
+skipping any figure immediately followed by a time-duration word
+(minute/hour/day/week, singular or plural) — checked against the raw
+text, not the tokenized haystack, since tokenizing would have already
+destroyed the adjacency this depends on. Verified directly: "15-minute
+call," "30 minute chat," and "10-min intro" all correctly skip, while
+"45% revenue increase," "12 years of experience," and "$50000 saved" all
+still flag — and confirmed against a REAL Herald follow-up generation
+that organically included "a quick 15-minute call," with zero false
+warnings.
+
+**Herald: drafts the second touch.** When an Outreach's status moves to
+`"Follow-up due"` (`outreach-detail-modal.tsx`'s `persist()`), Herald is
+called again automatically with a new optional `followUp: {
+daysSinceFirstTouch }` field threaded through the existing
+`/api/agents/herald-draft` route — one added system-prompt instruction
+("if this is a follow-up... much shorter, don't re-explain who you are")
+plus a conditional prompt block, not a second route or a different agent.
+The result overwrites the Outreach's subject/body/projectsReferenced/warnings
+in place (the "current draft" is always "the next thing to send," same
+reasoning as why "Approve & copy" doesn't keep a sent-history log) and
+posts a Herald case-file note, same pattern as the original draft.
+Best-effort: a Herald failure here never undoes the status change that
+already succeeded. Fixed a real staleness bug surfaced by this feature
+while building it: the modal rendered `outreach.warnings`/`outreach.projectsReferenced`
+straight from props, which never update after the modal mounts — added
+local state mirroring the existing `subject`/`body` pattern so a
+follow-up redraft's warnings actually show up in the open modal instead
+of the stale first-touch ones. Verified live end-to-end: seeded a
+"Sent" outreach 6 days in the past, moved it to "Follow-up due" through
+the real UI, and got back a real, genuinely different, much shorter
+Herald draft ("just floating this back up in case it got buried last
+week... still genuinely interested... happy to keep it to a quick
+15-minute call") with zero false warnings.
+
+All of P3 verified against a throwaway Firebase account (profile, resume,
+3 jobs, 1 contact, 1 "Sent" outreach) via real headless Chrome: J/K/P/D
+and Undo all confirmed working end-to-end on the real UI, Herald's
+follow-up draft and Open-in-Outlook's status transition both confirmed
+against real Firestore reads. Account and data deleted and confirmed
+gone — see the incident note above for the other cleanup this surfaced.
+`tsc --noEmit` and `next build` both clean.
+
+This was P3 off the 5-tier backlog (Section 28 was P1, Section 29 was
+P2); P4 (reliability) and P5 (portfolio) are still open.
+
 ## What this leaves for next time
 
 - The browser extension (spec-mentioned, not started).

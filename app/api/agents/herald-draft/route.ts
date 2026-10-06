@@ -28,6 +28,8 @@ You draft ONE short cold-outreach email (3-4 sentences in the body, not a cover 
 
 No generic flattery ("I've always admired your company culture"), no cliché openings ("I hope this email finds you well"), no over-explaining. Ask for one small, specific next step (a short call, a referral to the right person, feedback on fit) — not a job outright.
 
+If the prompt says this is a FOLLOW-UP (a second touch after an earlier email got no response), write something much shorter — 1-2 sentences, not the full pitch again. A light, low-pressure bump: you're still interested, still open to that same small ask. Never re-explain who you are or re-list your background as if this were the first email.
+
 Also write ONE short case-file note in your own voice — like a real note a teammate would read, distinct from the email itself — mentioning who you drafted for and, if relevant, which project you cited.`
 
 const short = z.string().max(300)
@@ -62,6 +64,12 @@ const RequestSchema = z.object({
   // Free text only — never a URL this route fetches (spec guardrail: no
   // scraping, contact/context info is supplied manually).
   roleContext: z.string().max(3000).optional(),
+  // Present only when this draft is a second touch (outreach-detail-modal.tsx
+  // calls this automatically when an Outreach's status moves to "Follow-up
+  // due") — steers the model toward a short bump instead of a fresh pitch,
+  // per the HERALD_SYSTEM instruction above. Absent for the normal
+  // first-touch draft (outreach-panel.tsx).
+  followUp: z.object({ daysSinceFirstTouch: z.number().int().min(0).max(3650) }).optional(),
 })
 type RequestBody = z.infer<typeof RequestSchema>
 type ResumeInput = RequestBody["resume"]
@@ -76,6 +84,9 @@ function buildPrompt(body: RequestBody): string {
     `Company: ${body.company}`,
     `Contact: ${body.contactName}`,
     body.roleContext ? `Role/context provided: ${body.roleContext}` : `Role/context provided: (none — general cold outreach)`,
+    body.followUp
+      ? `\nFOLLOW-UP CONTEXT\nThis is a second touch, ${body.followUp.daysSinceFirstTouch} day${body.followUp.daysSinceFirstTouch === 1 ? "" : "s"} after an initial cold email to this same contact that got no response. Keep it short per your instructions.`
+      : ``,
     ``,
     `CANDIDATE'S PROFILE`,
     `Target roles: ${body.targetRoles.join(", ") || "none set"}`,

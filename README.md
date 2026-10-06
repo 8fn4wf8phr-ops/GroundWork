@@ -184,10 +184,18 @@ company/role (selected the same way Quill selects projects for tailored
 materials — resolved server-side against your real Resume, never
 invented), and your portfolio/project links. Herald never sends anything.
 A draft lands in a review queue on the **Contacts** page (open a contact,
-"Draft with Herald") where you can edit the subject/body, then **Approve
-& copy** — which copies the body to your clipboard and marks it Sent, for
-you to paste into Outlook yourself. A direct Outlook send via Microsoft
-Graph OAuth is a planned fast-follow, not built in v1.
+"Draft with Herald") where you can edit the subject/body, then either
+**Approve & copy** (copies the body to your clipboard) or **Open in
+Outlook** (a prefilled `mailto:` link — your system's own mail handler,
+no Microsoft Graph OAuth needed) — either way marks it Sent, for you to
+review and send yourself. A direct, in-app Outlook send via Microsoft
+Graph is still a possible fast-follow, not built yet.
+
+When an outreach's status moves to **Follow-up due**, Herald
+automatically drafts a second-touch nudge — short, references the
+earlier email without repeating the full pitch — right into the same
+draft, so the next action is review-and-approve rather than starting from
+a blank subject line. See JOURNEY.md §30.
 
 **Ledger is extended, not duplicated** — the same agent and route that
 logs Application status changes also logs Outreach status changes
@@ -196,6 +204,18 @@ case file. Outreach follow-up dates flow into the exact same daily
 reminder and weekly digest emails Applications already use (see
 [Email notifications](#email-notifications-opt-in) above), not a
 separate notification type.
+
+## Review queue extras
+
+**Keyboard shortcuts**, active whenever a card isn't a field has focus:
+`J`/`K` move the highlighted card, `P` pursues it, `D` dismisses it (with
+a 6-second "Undo" toast). **Auto-archive** quietly files away postings
+that sit unreviewed for 3+ weeks, or whose own posting link now returns a
+genuine 404/410 — a separate `archived` status from a user's own
+`dismissed`, checked once a day inside the existing discovery cron rather
+than a third Vercel Cron job. See JOURNEY.md §30 for the full design,
+including a real incident caught during testing (and fixed) along the
+way.
 
 A soft daily cap (**Outreach daily cap** on the Profile page, default 10)
 warns — but never blocks — when approving would exceed it, to keep

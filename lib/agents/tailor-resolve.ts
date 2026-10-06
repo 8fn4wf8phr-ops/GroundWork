@@ -67,13 +67,26 @@ export function resolveSelection(
 // reasons" style prose isn't a factual claim worth flagging.
 const FIGURE_PATTERN = /[$€£]?\d[\d,]*(?:\.\d+)?%?/g
 
+// Scheduling logistics ("a 15-minute call", "30 min chat"), not a claim
+// about the candidate — Herald is explicitly instructed to ask for a
+// short call as its small next step (see HERALD_SYSTEM in
+// app/api/agents/herald-draft/route.ts), and that number has nothing to
+// verify against the resume. Matched against the text immediately
+// following the figure, with an optional hyphen/space, so "15-minute"
+// and "15 minutes" both skip.
+const TIME_UNIT_PATTERN = /^[\s-]*(minutes?|mins?|hours?|hrs?|days?|weeks?)\b/i
+
 function extractFigures(text: string): Set<string> {
   const figures = new Set<string>()
-  for (const raw of text.match(FIGURE_PATTERN) ?? []) {
+  for (const match of text.matchAll(FIGURE_PATTERN)) {
+    const raw = match[0]
     const cleaned = raw.replace(/,/g, "").replace(/\.$/, "")
     const digitsOnly = cleaned.replace(/\D/g, "")
     const isSignificant = /[$€£%]/.test(cleaned) || digitsOnly.length >= 2
-    if (isSignificant) figures.add(cleaned)
+    if (!isSignificant) continue
+    const tail = text.slice(match.index + raw.length, match.index + raw.length + 12)
+    if (TIME_UNIT_PATTERN.test(tail)) continue
+    figures.add(cleaned)
   }
   return figures
 }

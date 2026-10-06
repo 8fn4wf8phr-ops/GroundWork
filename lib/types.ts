@@ -59,10 +59,14 @@ export type Job = {
   matchReasons?: string[]
   // Review queue state for a discovered (non-manual) Job that has no
   // Application yet. Undefined/"pending" = awaiting a pursue/dismiss
-  // decision; "dismissed" = filed away, per the Section 2 narrative.
-  // Once the user pursues a Job, an Application is created and the Job
-  // simply stops appearing in the pending query — no third state needed.
-  reviewStatus?: "pending" | "dismissed"
+  // decision; "dismissed" = filed away by the user, per the Section 2
+  // narrative; "archived" = filed away by the system (lib/server/archive-stale-jobs.ts
+  // — sat too long unreviewed, or its own posting link now 404s) rather
+  // than a human decision, kept as a separate value so the two are never
+  // conflated. Once the user pursues a Job, an Application is created and
+  // the Job simply stops appearing in the pending query — no extra state
+  // needed for that case.
+  reviewStatus?: "pending" | "dismissed" | "archived"
 }
 
 export type Application = {

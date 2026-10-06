@@ -12,7 +12,16 @@ export type HeraldDraft = {
 export async function draftOutreach(
   resume: Resume,
   targetRoles: string[],
-  args: { company: string; contactName: string; contactEmail?: string; roleContext?: string },
+  args: {
+    company: string
+    contactName: string
+    contactEmail?: string
+    roleContext?: string
+    // Set to draft a second-touch nudge instead of a first-touch pitch —
+    // see outreach-detail-modal.tsx, which calls this automatically when
+    // an Outreach's status moves to "Follow-up due".
+    followUp?: { daysSinceFirstTouch: number }
+  },
 ): Promise<HeraldDraft> {
   return postAgent<HeraldDraft>(
     "/api/agents/herald-draft",
@@ -33,6 +42,7 @@ export async function draftOutreach(
       contactName: args.contactName,
       contactEmail: args.contactEmail,
       roleContext: args.roleContext,
+      followUp: args.followUp,
     },
     "Herald draft",
   )

@@ -1015,6 +1015,77 @@ This was one item off a 5-tier backlog (P1: match quality and cost); P2
 (mobile layout), P3 (Herald/workflow), P4 (reliability), and P5
 (portfolio) are still open.
 
+## 29. Mobile layout (P2 of the backlog)
+
+Second item off the same 5-tier user backlog as Section 28. Six sub-items,
+all in `components/applications-dashboard.tsx` plus a few view-level fixes:
+
+**Bottom tab bar below `sm`, left icon rail at `sm` and up.** The outer
+layout switched from an unconditional `flex` (row) to `flex-col sm:flex-row`,
+and the nav itself from a static `w-[72px]` column to `fixed inset-x-0
+bottom-0` with `justify-around` on mobile, reverting to the original
+static left-rail classes at `sm:`. Same six destinations, same `NavIcon`
+component, no new state — purely a responsive className change. Fixed
+positioning needed a matching `pb-16 sm:pb-0` on the main column so page
+content doesn't end up hidden behind the bar; added `env(safe-area-inset-bottom)`
+padding on the nav itself for the iOS home-indicator area.
+
+**Header**: the 6 agent-status avatars (decorative, not controls) are now
+`hidden sm:flex` rather than squeezed into an already-tight row. The
+"Review N new matches" button renders a `hidden sm:inline` full sentence
+and a `sm:hidden` compact "{n} new" badge from the same button element —
+same `onClick`, just different visible text per breakpoint. (That button's
+`onClick` itself was fixed in a prior session — reconfirmed still wired up
+while in this file.)
+
+**Review queue**: the title+intro block and the source-dropdown+Pull-button
+block now stack (`flex-col sm:flex-row`) instead of competing for one row.
+The "Dismiss lowest match %" input and its "%" label are now wrapped in
+their own `flex shrink-0` sub-container so they move together as a unit
+when the row wraps on narrow screens — before this they could separate,
+leaving a lone "%" on its own line.
+
+**Applications**: the "+ Add application"/"Export CSV" button row now
+wraps (`flex-wrap`) and the section header stacks on mobile, same pattern
+as Review queue. Applied the same header-stacking fix to Contacts and
+Analytics for consistency (Contacts' "+ Add contact" button also got
+`self-start` so it doesn't stretch full-width once its parent is a
+mobile `flex-col`).
+
+**No horizontal scroll** — checked by comparing `document.documentElement.scrollWidth`
+to `window.innerWidth` across all six views at a real 375px viewport.
+Five were clean immediately; Resume overflowed by 12px. Root cause: the
+"Portfolio site URL" row (`resume-view.tsx`) paired a `flex-1` input with
+a `shrink-0` "Sync from portfolio" button in a non-wrapping `flex` row —
+`shrink-0` meant the button's full width was non-negotiable, and the
+input's *default* flex-item min-width (`auto`, which resolves to its
+intrinsic content size, not 0) meant it couldn't shrink enough to
+compensate. Fixed with `min-w-0` on the input (lets it actually shrink)
+and `flex-col sm:flex-row` on the row (stacks instead of forcing it on
+mobile). Grepped for the same `flex-1` input next to a `shrink-0`/fixed-
+width sibling pattern elsewhere (`bullet-list-input.tsx`,
+`application-detail-modal.tsx`'s contact-linking row) — neither was
+actually overflowing yet (their sibling buttons are short: "Add", a
+short label), but added `min-w-0` to both proactively since it's the same
+latent bug class with a longer button label or longer content away from
+tripping.
+
+Verified against a throwaway Firebase account (profile, resume, two Jobs
+— one deliberately senior-titled to also sanity-check Section 28's
+scoring fix rendering correctly in this new mobile layout — one
+Application, one Contact) and a real headless Chrome at a 375×812
+viewport: signed in via a minted custom token, clicked through all six
+views via the new bottom tab bar, screenshotted each, and confirmed
+`scrollWidth === innerWidth` on every one after the Resume fix. Also
+re-checked at 1280px to confirm the desktop layout (left rail, full-text
+Review button, visible agent avatars) is pixel-identical to before —
+every mobile-only change is gated behind `sm:` so nothing above that
+breakpoint changed. Account and data deleted and confirmed gone
+afterward. `tsc --noEmit` and `next build` both clean.
+
+This was P2 off the 5-tier backlog (Section 28 was P1); P3 (Herald/
+workflow), P4 (reliability), and P5 (portfolio) are still open.
+
 ## What this leaves for next time
 
 - The browser extension (spec-mentioned, not started).

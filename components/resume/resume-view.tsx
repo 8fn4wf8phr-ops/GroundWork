@@ -96,7 +96,7 @@ export default function ResumeView() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl p-6">
+    <div className="mx-auto w-full max-w-2xl p-4 sm:p-6">
       <div className="mb-6">
         <h2 className="text-xl font-bold" style={{ color: colors.text, fontFamily: "var(--font-space-grotesk)" }}>
           Resume
@@ -107,7 +107,7 @@ export default function ResumeView() {
         </p>
       </div>
 
-      <div className="flex flex-col gap-6 rounded-xl border p-6" style={{ borderColor: colors.border, backgroundColor: colors.panel }}>
+      <div className="flex flex-col gap-6 rounded-xl border p-4 sm:p-6" style={{ borderColor: colors.border, backgroundColor: colors.panel }}>
         <label className="flex flex-col gap-1.5 text-sm">
           <span style={{ color: colors.muted }}>Professional summary</span>
           <textarea
@@ -133,12 +133,12 @@ export default function ResumeView() {
         <div className="flex flex-col gap-2">
           <label className="flex flex-col gap-1.5 text-sm">
             <span style={{ color: colors.muted }}>Portfolio site URL (optional)</span>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <input
                 value={portfolioUrl}
                 onChange={(e) => setPortfolioUrl(e.target.value)}
                 placeholder="https://yourportfolio.com"
-                className="flex-1 rounded-lg border bg-transparent px-3 py-2 text-sm outline-none"
+                className="min-w-0 flex-1 rounded-lg border bg-transparent px-3 py-2 text-sm outline-none"
                 style={{ borderColor: colors.border, color: colors.text }}
               />
               <button

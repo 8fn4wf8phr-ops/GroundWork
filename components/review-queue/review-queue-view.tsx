@@ -88,7 +88,7 @@ function QueueCard({
         </ul>
       )}
 
-      <div className="mt-3 flex items-center gap-2.5">
+      <div className="mt-3 flex flex-wrap items-center gap-2.5">
         <button
           type="button"
           disabled={busy}
@@ -258,8 +258,8 @@ export default function ReviewQueueView() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl p-6">
-      <div className="mb-2 flex items-center justify-between">
+    <div className="mx-auto w-full max-w-3xl p-4 sm:p-6">
+      <div className="mb-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-bold" style={{ color: colors.text, fontFamily: "var(--font-space-grotesk)" }}>
             Review queue
@@ -299,22 +299,27 @@ export default function ReviewQueueView() {
           <span className="text-sm" style={{ color: colors.muted }}>
             Dismiss lowest match %:
           </span>
-          <input
-            type="number"
-            inputMode="numeric"
-            min={0}
-            max={100}
-            value={dismissThreshold}
-            onChange={(e) => {
-              setDismissThreshold(e.target.value)
-              setConfirmingSweep(false)
-            }}
-            className="w-16 rounded-md border bg-transparent px-2 py-1 text-sm outline-none"
-            style={{ borderColor: colors.border, color: colors.text }}
-          />
-          <span className="text-sm" style={{ color: colors.muted }}>
-            %
-          </span>
+          {/* Grouped so the input and "%" move together as one unit when
+              this row wraps on narrow screens, instead of the "%" landing
+              alone on its own line. */}
+          <div className="flex shrink-0 items-center gap-1">
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={100}
+              value={dismissThreshold}
+              onChange={(e) => {
+                setDismissThreshold(e.target.value)
+                setConfirmingSweep(false)
+              }}
+              className="w-16 rounded-md border bg-transparent px-2 py-1 text-sm outline-none"
+              style={{ borderColor: colors.border, color: colors.text }}
+            />
+            <span className="text-sm" style={{ color: colors.muted }}>
+              %
+            </span>
+          </div>
           {confirmingSweep ? (
             <>
               <span className="text-sm" style={{ color: colors.amber }}>

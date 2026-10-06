@@ -252,7 +252,7 @@ export default function ApplicationDetailModal({
                 <select
                   value={linkingContactId}
                   onChange={(e) => setLinkingContactId(e.target.value)}
-                  className="flex-1 rounded-lg border bg-transparent px-3 py-2 text-sm outline-none"
+                  className="min-w-0 flex-1 rounded-lg border bg-transparent px-3 py-2 text-sm outline-none"
                   style={{ borderColor: colors.border, color: colors.text, backgroundColor: colors.panel }}
                 >
                   <option value="" style={{ backgroundColor: colors.panel }}>

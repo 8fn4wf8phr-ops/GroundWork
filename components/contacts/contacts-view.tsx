@@ -20,8 +20,8 @@ export default function ContactsView({ applications }: { applications: Applicati
       .filter((c): c is string => Boolean(c))
 
   return (
-    <div className="mx-auto w-full max-w-3xl p-6">
-      <div className="mb-6 flex items-center justify-between">
+    <div className="mx-auto w-full max-w-3xl p-4 sm:p-6">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-bold" style={{ color: colors.text, fontFamily: "var(--font-space-grotesk)" }}>
             Contacts
@@ -33,7 +33,7 @@ export default function ContactsView({ applications }: { applications: Applicati
         <button
           type="button"
           onClick={() => setShowAddModal(true)}
-          className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:opacity-90"
+          className="self-start rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:opacity-90"
           style={{ borderColor: colors.border, color: colors.text }}
         >
           + Add contact

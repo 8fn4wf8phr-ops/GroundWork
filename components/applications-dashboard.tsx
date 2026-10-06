@@ -209,13 +209,17 @@ export default function ApplicationsDashboard() {
 
   return (
     <div
-      className="flex min-h-screen font-sans"
+      className="flex min-h-screen flex-col font-sans sm:flex-row"
       style={{ backgroundColor: colors.bg, color: colors.text, fontFamily: "var(--font-inter)" }}
     >
-      {/* Left icon rail */}
+      {/* Nav: fixed bottom tab bar below sm, left icon rail at sm and up —
+          same six destinations either way, just re-laid-out. Fixed
+          positioning on mobile means the main column needs matching
+          bottom padding (added below) so content doesn't end up hidden
+          behind it. */}
       <nav
-        className="flex w-[72px] shrink-0 flex-col items-center gap-3 border-r py-4"
-        style={{ borderColor: colors.border, backgroundColor: colors.bg }}
+        className="fixed inset-x-0 bottom-0 z-20 flex h-16 shrink-0 flex-row items-center justify-around border-t px-2 sm:static sm:h-auto sm:w-[72px] sm:flex-col sm:items-center sm:justify-start sm:gap-3 sm:border-t-0 sm:border-r sm:px-0 sm:py-4"
+        style={{ borderColor: colors.border, backgroundColor: colors.bg, paddingBottom: "env(safe-area-inset-bottom)" }}
         aria-label="Primary"
       >
         <NavIcon active={view === "applications"} onClick={() => setView("applications")} label="Applications">
@@ -250,11 +254,11 @@ export default function ApplicationsDashboard() {
         </NavIcon>
       </nav>
 
-      {/* Main column */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      {/* Main column. pb-16 clears the fixed bottom tab bar below sm. */}
+      <div className="flex min-w-0 flex-1 flex-col pb-16 sm:pb-0">
         {/* Header bar */}
         <header
-          className="flex flex-wrap items-center justify-between gap-4 border-b px-6 py-4"
+          className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:gap-4 sm:px-6 sm:py-4"
           style={{ borderColor: colors.border }}
         >
           <div className="flex items-center gap-2">
@@ -267,8 +271,10 @@ export default function ApplicationsDashboard() {
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Agent status avatars are decorative, not controls — hidden
+                below sm rather than squeezed into an already-tight row. */}
+            <div className="hidden items-center gap-1.5 sm:flex">
               <AgentAvatar kind="lamp" />
               <AgentAvatar kind="binocular" />
               <AgentAvatar kind="compass" active />
@@ -280,10 +286,13 @@ export default function ApplicationsDashboard() {
               <button
                 type="button"
                 onClick={() => setView("review")}
-                className="rounded-lg px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
+                className="rounded-lg px-2.5 py-1.5 text-sm font-semibold transition-opacity hover:opacity-90 sm:px-4 sm:py-2"
                 style={{ backgroundColor: colors.teal, color: colors.bg }}
               >
-                Review {pending.length} new match{pending.length === 1 ? "" : "es"}
+                <span className="hidden sm:inline">
+                  Review {pending.length} new match{pending.length === 1 ? "" : "es"}
+                </span>
+                <span className="sm:hidden">{pending.length} new</span>
               </button>
             )}
             <UserMenu />
@@ -304,12 +313,12 @@ export default function ApplicationsDashboard() {
         /* Two-panel body */
         <div className="flex flex-1 flex-col lg:flex-row">
           {/* Left panel — Applications kanban */}
-          <section className="min-w-0 flex-1 border-b p-6 lg:border-b-0 lg:border-r" style={{ borderColor: colors.border }}>
-            <div className="mb-6 flex items-center justify-between">
+          <section className="min-w-0 flex-1 border-b p-4 sm:p-6 lg:border-b-0 lg:border-r" style={{ borderColor: colors.border }}>
+            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-xl font-bold" style={{ color: colors.text, fontFamily: "var(--font-space-grotesk)" }}>
                 Applications
               </h2>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <span className="text-sm" style={{ color: colors.muted }}>
                   {loading ? "Loading…" : `${activeCount} active`}
                 </span>
@@ -350,7 +359,7 @@ export default function ApplicationsDashboard() {
           </section>
 
           {/* Right panel — Case file */}
-          <aside className="w-full shrink-0 p-6 lg:w-[420px]">
+          <aside className="w-full shrink-0 p-4 sm:p-6 lg:w-[420px]">
             <CaseFileFeed />
           </aside>
         </div>

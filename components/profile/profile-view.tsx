@@ -115,7 +115,7 @@ export default function ProfileView() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl p-6">
+    <div className="mx-auto w-full max-w-2xl p-4 sm:p-6">
       <div className="mb-6">
         <h2 className="text-xl font-bold" style={{ color: colors.text, fontFamily: "var(--font-space-grotesk)" }}>
           Profile
@@ -127,7 +127,7 @@ export default function ProfileView() {
       </div>
 
       <div
-        className="flex flex-col gap-5 rounded-xl border p-6"
+        className="flex flex-col gap-5 rounded-xl border p-4 sm:p-6"
         style={{ borderColor: colors.border, backgroundColor: colors.panel }}
       >
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

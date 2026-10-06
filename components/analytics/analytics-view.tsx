@@ -188,8 +188,8 @@ export default function AnalyticsView() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl p-6">
-      <div className="mb-6 flex items-start justify-between gap-4">
+    <div className="mx-auto w-full max-w-3xl p-4 sm:p-6">
+      <div className="mb-6 flex flex-col items-start gap-3 sm:flex-row sm:justify-between sm:gap-4">
         <div>
           <h2 className="text-xl font-bold" style={{ color: colors.text, fontFamily: "var(--font-space-grotesk)" }}>
             Analytics

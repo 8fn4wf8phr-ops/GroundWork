@@ -36,9 +36,10 @@ and turn off — see JOURNEY.md §28.
 Quill, Ledger, Lens, Herald — see JOURNEY.md §15-17, §26), structured
 Resume storage, resume/cover-letter tailoring, cold-outreach drafting
 (see [Outreach](#outreach-herald--ledger) below), follow-up reminders,
-referral/channel Analytics, portfolio project sync, and email
+referral/channel Analytics, portfolio project sync, email
 notifications (see [Email notifications](#email-notifications-opt-in)
-below).
+below), and a mobile layout (bottom tab bar below 640px, no horizontal
+scroll on any view) — see JOURNEY.md §29.
 
 **Not started:** the browser extension.
 

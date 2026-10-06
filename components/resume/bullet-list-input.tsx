@@ -55,7 +55,7 @@ export default function BulletListInput({
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Add a bullet point — press Enter"
-          className="flex-1 rounded-lg border bg-transparent px-3 py-2 text-sm outline-none"
+          className="min-w-0 flex-1 rounded-lg border bg-transparent px-3 py-2 text-sm outline-none"
           style={{ borderColor: colors.border, color: colors.text }}
         />
         <button

@@ -11,6 +11,23 @@ repo). This README covers what's actually built and how to run it.
 [`JOURNEY.md`](./JOURNEY.md) is a narrative log of how it got built,
 including the real bugs hit along the way.
 
+**[Try the live demo](https://groundwork-six-ochre.vercel.app/demo)** — no sign-up, no real data, just sample
+postings and applications to click through (the review queue's
+seniority-penalty and clearance-flag scoring, a kanban board, an agent
+disagreement that escalates to "needs your call," and the pursue-rate-by-
+source funnel). Nothing you do there is saved.
+
+![Groundwork demo: scoring a posting in the Review queue, pursuing it onto the Applications board, then checking Analytics](docs/demo.gif)
+
+<details>
+<summary>Static screenshots</summary>
+
+![Applications board with a live Case File feed](docs/screenshot-applications.png)
+![Review queue showing the seniority penalty and clearance-flag scoring](docs/screenshot-review-queue.png)
+![Analytics: response/interview/offer rates and pursue rate by source](docs/screenshot-analytics.png)
+
+</details>
+
 ## Status
 
 **Phase 1 (Foundation) — complete.** Auth, the full Firestore data model,

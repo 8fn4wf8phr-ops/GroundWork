@@ -1359,6 +1359,73 @@ showing it clear of the bottom tab bar with no horizontal overflow.
 This was P4 off the 5-tier backlog (Sections 28-30 were P1-P3); P5
 (portfolio) is the last one open.
 
+## 32. Portfolio (P5 of the backlog — last item)
+
+Last item off the 5-tier backlog from Sections 28-31. Three sub-items,
+different in character from the rest — this is showcase/marketing
+surface, not core product work.
+
+**Public demo mode, no login.** New `/demo` route
+(`components/demo/demo-dashboard.tsx`) rather than a "demo mode" flag
+threaded through the real app's Firestore-backed hooks
+(`use-applications`, `use-review-queue`, etc.) — a deliberately SEPARATE
+component tree with its own local React state, seeded from
+`lib/demo/demo-data.ts`. Reasoning: the real hooks' whole job is talking
+to a live account; adding a conditional branch to each one so a public,
+no-auth route could also drive them would mean the one page meant to be
+shared with strangers shares code paths with the one thing most important
+to keep working correctly for the real user. A separate tree costs some
+duplicated JSX against `applications-dashboard.tsx` and friends, but
+makes the demo structurally incapable of touching real data or spending
+real Anthropic/Firebase budget — not "trusted not to," actually can't.
+Three views (Applications kanban + Case File, Review queue, Analytics),
+interactive (Pursue/Dismiss actually move cards between local state),
+resets on reload. Sample data was picked specifically to demonstrate
+things a screenshot alone can't: a seniority-penalized posting and a
+clearance-flag posting (both from Section 28's scoring work), a real
+Compass/Scout disagreement that escalates via `needsYourCall` (spec §8),
+and the pursue-rate-by-source funnel (also Section 28). Verified via
+headless Chrome with NO sign-in step at all (confirming the whole point —
+no auth call ever happens), clicking Pursue and confirming the card
+correctly appears on the Applications board; checked at both 1280px and
+375px with the same `scrollWidth`/`innerWidth` check used throughout
+Section 29, clean at both.
+
+**README visuals.** No `ffmpeg` in this environment, so rather than
+silently settle for static screenshots only, installed `gifenc` + `pngjs`
+(pure-JS, in the session scratchpad — NOT added as project dependencies,
+since they're a one-off asset-generation tool, not something the shipped
+app needs) and wrote a small script: Playwright captures a sequence of
+real screenshots of `/demo` mid-interaction (Review queue → Pursue → the
+new card on the Applications board → Analytics), `pngjs` decodes each PNG
+to raw RGBA, `gifenc` quantizes and encodes them into a real animated GIF
+— not a fabricated one, not a misleading "simulated" label on static
+images. Result committed to `docs/demo.gif` (176 KB) plus three static
+PNG fallbacks (`docs/screenshot-*.png`) in a collapsed `<details>` section
+for anyone whose viewer doesn't render GIFs well. README now opens with a
+link to the live demo and the GIF, right after the intro paragraph.
+
+**Case study.** Drafted as `CASE_STUDY.md` in this repo — content for the
+user's own personal portfolio site, not something this repo can publish
+there directly (that site is a separate repo/codebase this session has no
+access to). Kept it short and concrete rather than a feature list: one
+section on the compute-first/narrate-second design constraint that
+shaped the rest of the agent system, three short "problems worth
+describing" callouts pulled from real engineering decisions already
+documented elsewhere in this file (the seniority-scoring bug from Section
+28, the Firestore ownerId-tampering fix from Section 31, the cheap-
+rules-before-the-LLM-call cost control also from Section 28) — real
+specifics with real numbers, not generic "built with AI" framing.
+
+All three verified live where "live" is meaningful: the demo mode's
+interactivity and both viewport sizes via headless Chrome, the GIF by
+actually opening the generated file and confirming the first frame
+renders correctly. `tsc --noEmit` clean; `next build` adds one new static
+route (`○ /demo`) alongside the existing ones.
+
+This closes out the 5-tier backlog from a pasted user list (Sections
+28-32 = P1-P5). Nothing from that list is open anymore.
+
 ## What this leaves for next time
 
 - The browser extension (spec-mentioned, not started).
